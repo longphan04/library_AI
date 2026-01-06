@@ -1,0 +1,28 @@
+# 1. BẢO MẬT (QUAN TRỌNG NHẤT)
+.env
+
+# 2. MÔI TRƯỜNG & THƯ VIỆN
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# 3. DỮ LIỆU & LOG
+logs/*
+reports/*
+data/raw/*
+data/processed/*
+data/rich_text/*
+
+# 4. GIỮ LẠI CẤU TRÚC THƯ MỤC
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/rich_text/.gitkeep
+!logs/.gitkeep
+!reports/.gitkeep
+
+# 5. KHÁC
+.DS_Store
+.idea/
+.vscode/
+notebooks/*
