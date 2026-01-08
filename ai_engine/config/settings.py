@@ -32,7 +32,7 @@ class Settings:
 ]
     
     # MODEL EMBEDDING
-    EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-base"
+    EMBEDDING_MODEL_NAME = "models/text-embedding-004"
     VECTOR_DIMENSION = 768
 
     @staticmethod

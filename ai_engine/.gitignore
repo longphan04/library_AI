@@ -13,7 +13,7 @@ reports/*
 data/raw/*
 data/processed/*
 data/rich_text/*
-data/vector_db/*
+
 # 4. GIỮ LẠI CẤU TRÚC THƯ MỤC
 !data/raw/.gitkeep
 !data/processed/.gitkeep
