@@ -13,11 +13,13 @@ reports/*
 data/raw/*
 data/processed/*
 data/rich_text/*
+data/vector_db/*
 
 # 4. GIỮ LẠI CẤU TRÚC THƯ MỤC
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/rich_text/.gitkeep
+!data/vector_db/.gitkeep
 !logs/.gitkeep
 !reports/.gitkeep
 
@@ -26,3 +28,4 @@ data/rich_text/*
 .idea/
 .vscode/
 notebooks/*
+.agent/*
