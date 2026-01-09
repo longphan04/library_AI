@@ -2,9 +2,9 @@ import os
 import glob
 import logging
 import re
-from ai_engine.src.embedder import Embedder
-from ai_engine.src.vector_db import VectorDB
-from ai_engine.config import settings
+from src.embedder import Embedder
+from src.vector_db import VectorDB
+from config.settings import settings
 
 logger = logging.getLogger("Indexer")
 

@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Optional
-from ai_engine.src.embedder import Embedder
-from ai_engine.src.vector_db import VectorDB
+from src.embedder import Embedder
+from src.vector_db import VectorDB
 
 logger = logging.getLogger("SearchEngine")
 

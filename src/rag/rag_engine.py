@@ -16,23 +16,58 @@ class RAGEngine:
             return []
         return self.search_engine.search(query=question, top_k=self.top_k)
 
-    def build_context(self, docs):
-        return "\n\n".join(f"📘 {d['title']}\n{d['snippet']}" for d in docs)
-
     def generate_answer(self, question: str) -> str:
         docs = self.retrieve(question)
-        if not docs:
-            return "❌ Tôi không tìm thấy thông tin phù hợp trong thư viện."
 
+        # ❌ Không có dữ liệu → trả thẳng
+        if not docs:
+            return "❌ Tôi không tìm thấy sách phù hợp trong thư viện."
+
+        # ==================================================
+        # 1️⃣ BƯỚC FACTUAL – CODE TỰ LIỆT KÊ SÁCH (KHÔNG LLM)
+        # ==================================================
+        book_lines = []
+        for i, d in enumerate(docs, start=1):
+            title = d.get("title", "Không rõ")
+            authors = d.get("authors", "Không rõ")
+            year = d.get("published_year", "N/A")
+            category = d.get("category", "")
+
+            book_lines.append(
+                f"{i}. {title} – {authors} ({year})"
+                + (f" | Thể loại: {category}" if category else "")
+            )
+
+        books_text = "\n".join(book_lines)
+
+        # ==================================================
+        # 2️⃣ PROMPT – LLM CHỈ ĐƯỢC GIẢI THÍCH
+        # ==================================================
         prompt = f"""{SYSTEM_PROMPT}
 
 {USER_PROMPT_TEMPLATE.format(
     question=question,
-    context=self.build_context(docs)
-)}"""
+    books=books_text
+)}
+"""
 
         resp = self.model.generate_content(
             prompt,
-            generation_config={"temperature": 0.2, "max_output_tokens": 512}
+            generation_config={
+                "temperature": 0.2,
+                "max_output_tokens": 512
+            }
         )
-        return resp.text.strip()
+
+        explanation = resp.text.strip() if resp and resp.text else ""
+
+        # ==================================================
+        # 3️⃣ OUTPUT CUỐI – CÓ KIỂM SOÁT
+        # ==================================================
+        return f"""📚 **Danh sách sách liên quan trong thư viện**
+
+{books_text}
+
+📝 **Nhận xét**
+{explanation}
+"""

@@ -1,7 +1,7 @@
 import logging
 import torch
 from sentence_transformers import SentenceTransformer
-from ai_engine.config import settings
+from config.settings import settings
 
 logger = logging.getLogger("Embedder")
 

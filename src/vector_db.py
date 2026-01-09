@@ -2,7 +2,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 import logging
 import os
-from ai_engine.config import settings
+from config.settings import settings
 
 logger = logging.getLogger("VectorDB")
 

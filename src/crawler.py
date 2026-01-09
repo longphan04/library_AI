@@ -4,7 +4,7 @@ import time
 import requests
 import logging
 from datetime import datetime
-from ai_engine.config import settings
+from config.settings import settings
 
 # logging setup
 log_filename = os.path.join(settings.LOG_DIR, "crawler.log")

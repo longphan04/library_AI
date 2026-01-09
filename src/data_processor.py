@@ -5,7 +5,7 @@ import glob
 import logging
 import re
 from datetime import datetime
-from ai_engine.config import settings
+from config.settings import settings
 
 # --- SETUP LOGGER ---
 log_filename = os.path.join(settings.LOG_DIR, "data_processor.log")
