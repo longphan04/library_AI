@@ -1,6 +1,8 @@
 import logging
+
 import torch
 from sentence_transformers import SentenceTransformer
+
 from config.settings import settings
 
 logger = logging.getLogger("Embedder")

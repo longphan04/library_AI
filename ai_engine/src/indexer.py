@@ -1,10 +1,11 @@
-import os
 import glob
 import logging
+import os
 import re
+
+from config.settings import settings
 from src.embedder import Embedder
 from src.vector_db import VectorDB
-from config.settings import settings
 
 logger = logging.getLogger("Indexer")
 

@@ -1,7 +1,9 @@
-import chromadb
-from chromadb.config import Settings as ChromaSettings
 import logging
 import os
+
+import chromadb
+from chromadb.config import Settings as ChromaSettings
+
 from config.settings import settings
 
 logger = logging.getLogger("VectorDB")
