@@ -1,4 +1,5 @@
 import argparse
+
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
 from src.indexer import Indexer

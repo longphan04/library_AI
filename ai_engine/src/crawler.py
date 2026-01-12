@@ -1,9 +1,11 @@
-import os
 import json
-import time
-import requests
 import logging
+import os
+import time
 from datetime import datetime
+
+import requests
+
 from config.settings import settings
 
 # logging setup
