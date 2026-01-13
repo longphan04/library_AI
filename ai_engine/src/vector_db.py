@@ -10,8 +10,6 @@ logger = logging.getLogger("VectorDB")
 
 class VectorDB:
     def __init__(self):
-        # Đảm bảo thư mục tồn tại
-        os.makedirs(settings.VECTOR_DB_DIR, exist_ok=True)
         self.db_path = settings.VECTOR_DB_DIR
         self.collection_name = "library_knowledge_base"
         
