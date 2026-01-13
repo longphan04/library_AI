@@ -34,6 +34,13 @@ class Settings:
     # MODEL EMBEDDING
     EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-base"
     VECTOR_DIMENSION = 768
+    
+    # DATABASE (MySQL)
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = int(os.getenv("DB_PORT", 3307))
+    DB_USER = os.getenv("DB_USER", "root")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
+    DB_NAME = os.getenv("DB_NAME", "library_db")
 
     @staticmethod
     def ensure_directories():

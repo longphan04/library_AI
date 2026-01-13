@@ -22,7 +22,6 @@ class Embedder:
         Vector hóa văn bản.
         - Nếu là lưu vào DB (Passage): Thêm tiền tố "passage: "
         - Nếu là Query: Thêm tiền tố "query: "
-        Rule: Guide Step 2 & 3.
         """
         if not text:
             return None
@@ -40,7 +39,7 @@ class Embedder:
 
     def embed_batch(self, texts, is_query=False):
         """
-        Xử lý vector hóa theo batch để tối ưu hiệu suất (Rule 4).
+        Xử lý vector hóa theo batch để tối ưu hiệu suất.
         """
         if not texts:
             return []
