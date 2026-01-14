@@ -6,9 +6,9 @@ from datetime import datetime
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.embedder import Embedder
-from src.vector_db import VectorDB
-from config.settings import settings
+from ai_engine.src.embedder import Embedder
+from ai_engine.src.vector_db import VectorDB
+from ai_engine.config.settings import settings
 
 
 class TestVectorFlow:
