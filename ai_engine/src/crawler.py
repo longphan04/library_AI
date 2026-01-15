@@ -7,19 +7,10 @@ from datetime import datetime
 import requests
 
 from config.settings import settings
+from config.logging_config import get_logger
 
-# logging setup
-log_filename = os.path.join(settings.LOG_DIR, "crawler.log")
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - [%(name)s] - %(message)s',
-    handlers=[
-        logging.FileHandler(log_filename, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("GoogleBooksCrawler")
+# Get logger (config done in main.py)
+logger = get_logger("GoogleBooksCrawler")
 
 class GoogleBooksCrawler:
     def __init__(self):

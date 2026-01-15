@@ -7,18 +7,10 @@ import re
 from datetime import datetime
 
 from config.settings import settings
+from config.logging_config import get_logger
 
-# --- SETUP LOGGER ---
-log_filename = os.path.join(settings.LOG_DIR, "data_processor.log")
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - [%(name)s] - %(message)s',
-    handlers=[
-        logging.FileHandler(log_filename, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("DataProcessor")
+# Get logger (config done in main.py)
+logger = get_logger("DataProcessor")
 
 class DataProcessor:
     def __init__(self):
@@ -261,11 +253,14 @@ class DataProcessor:
 
         logger.info(f"Found {len(raw_files)} raw files. Processing...")
 
-        for filepath in raw_files:
+        for idx, filepath in enumerate(raw_files, 1):
             try:
+                logger.info(f"[{idx}/{len(raw_files)}] Processing: {os.path.basename(filepath)}")
+                
                 with open(filepath, 'r', encoding='utf-8') as f:
                     raw_data = json.load(f)
                     if isinstance(raw_data, list):
+                        processed_count = 0
                         for item in raw_data:
                             cleaned_book = self.clean_item(item, seen_ids)
                             
@@ -276,6 +271,9 @@ class DataProcessor:
                                 
                                 all_clean_books.append(cleaned_book)
                                 seen_ids.add(cleaned_book['id'])
+                                processed_count += 1
+                        
+                        logger.info(f"  ✓ Processed {processed_count} valid books from {os.path.basename(filepath)}")
             except Exception as e:
                 logger.error(f"Error processing file {filepath}: {e}")
 
