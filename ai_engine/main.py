@@ -30,5 +30,6 @@ def main():
         chat_main()
 
 # test
+#test x2
 if __name__ == "__main__":
     main()
