@@ -4,6 +4,7 @@ import json
 import logging
 import google.genai as genai
 from typing import List, Dict
+from pathlib import Path
 
 from ..search_engine import SearchEngine
 from .prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
@@ -14,25 +15,29 @@ from .prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
 DEFAULT_TOP_K = 5
 SEARCH_EXPAND_FACTOR = 3
 SCORE_THRESHOLD = 0.80
+QUERY_CACHE_THRESHOLD = 0.95
 
 logger = logging.getLogger("RAGEngine")
 
 
 class RAGEngine:
-    def __init__(self, top_k: int = DEFAULT_TOP_K):
+    def __init__(self, user_id: str, top_k: int = DEFAULT_TOP_K):
+        self.user_id = user_id
         self.search_engine = SearchEngine()
+        self.embedder = self.search_engine.embedder
+        self.vector_db = self.search_engine.vector_db
         self.top_k = top_k
 
-        # Gemini client (stable)
+        # Gemini client
         self.client = genai.Client(
             api_key=os.getenv("GOOGLE_API_KEY")
         )
 
-        # Memory cho follow-up
+        # Short-term context (RAM)
         self.last_docs: List[Dict] = []
 
     # ==================================================
-    # 🔧 GEMINI HELPER (STABLE – NO CONFIG)
+    # 🔧 GEMINI
     # ==================================================
     def _genai_generate(self, prompt: str) -> str:
         resp = self.client.models.generate_content(
@@ -42,168 +47,102 @@ class RAGEngine:
         return resp.text.strip() if resp and resp.text else ""
 
     # ==================================================
-    # 🚫 GARBAGE FILTER
+    # 🧹 CLEAR CONTEXT / NEW CHAT
     # ==================================================
-    def is_garbage_query(self, query: str) -> bool:
-        if not query or not query.strip():
+    def clear_context(self):
+        """
+        Reset short-term memory for a new topic.
+        DOES NOT delete user history in DB.
+        """
+        self.last_docs.clear()
+        logger.info(f"Context cleared for user {self.user_id}")
+
+    # ==================================================
+    # 🚫 GARBAGE
+    # ==================================================
+    def is_garbage_query(self, q: str) -> bool:
+        if not q or not q.strip():
             return True
-        q = query.strip().lower()
-        if len(q) < 3:
-            return True
-        if q.isdigit():
+        q = q.lower()
+        if len(q) < 3 or q.isdigit():
             return True
         if not re.search(r"[a-zA-ZÀ-ỹ]", q):
             return True
         return False
 
     # ==================================================
-    # 📊 THỐNG KÊ THƯ VIỆN
+    # 📊 STATS
     # ==================================================
-    def is_library_stats_query(self, question: str) -> bool:
-        q = question.lower()
-        keywords = [
-            "bao nhiêu sách",
-            "bao nhiêu cuốn",
-            "tổng số sách",
-            "số lượng sách",
-            "thư viện có bao nhiêu"
-        ]
-        return any(k in q for k in keywords)
+    def is_library_stats_query(self, q: str) -> bool:
+        q = q.lower()
+        return any(k in q for k in [
+            "bao nhiêu sách", "bao nhiêu cuốn",
+            "tổng số sách", "số lượng sách"
+        ])
 
     # ==================================================
-    # 🏛️ THÔNG TIN THƯ VIỆN
+    # 🏛️ LIBRARY INFO
     # ==================================================
-    def is_library_info_query(self, question: str) -> bool:
-        q = question.lower()
-        keywords = [
-            "mở cửa",
-            "đóng cửa",
-            "giờ mở",
-            "giờ đóng",
-            "giờ làm việc",
-            "nội quy",
-            "quy định",
-            "mượn sách",
-            "trả sách",
-            "gia hạn",
-            "phí phạt"
-        ]
-        return any(k in q for k in keywords)
+    def is_library_info_query(self, q: str) -> bool:
+        q = q.lower()
+        return any(k in q for k in [
+            "mở cửa", "đóng cửa", "giờ mở", "giờ làm việc",
+            "nội quy", "mượn sách", "trả sách", "phí phạt"
+        ])
 
     # ==================================================
-    # 🧠 FOLLOW-UP (CUỐN THỨ 2, CUỐN ĐÓ…)
+    # 🧠 FOLLOW-UP
     # ==================================================
-    def is_followup_query(self, question: str) -> bool:
-        if not self.last_docs:
-            return False
-        q = question.lower()
-        patterns = [
-            "cuốn này",
-            "cuốn đó",
-            "cuốn thứ",
-            "sách này",
-            "sách đó"
-        ]
-        return any(p in q for p in patterns)
-
-    def answer_followup(self, question: str) -> str:
-        q = question.lower()
-        idx = None
-
-        match = re.search(r"thứ\s*(\d+)", q)
-        if match:
-            idx = int(match.group(1)) - 1
-
-        if idx is not None and 0 <= idx < len(self.last_docs):
-            book = self.last_docs[idx]
-            return (
-                f"📘 **{book['title']}**\n"
-                f"- Tác giả: {book['authors']}\n"
-                f"- Năm xuất bản: {book['published_year']}\n"
-                f"- Thể loại: {book.get('category','')}\n\n"
-                f"📝 Tóm tắt:\n{book.get('snippet','')}"
-            )
-
-        return "❌ Tôi không xác định được cuốn sách bạn đang hỏi."
+    def is_followup_query(self, q: str) -> bool:
+        return bool(self.last_docs) and any(k in q.lower() for k in [
+            "cuốn này", "cuốn đó", "cuốn thứ", "sách này"
+        ])
 
     # ==================================================
-    # 🧠 CÓ CẦN TỔNG HỢP KHÔNG?
-    # ==================================================
-    def needs_synthesis(self, question: str) -> bool:
-        q = question.lower()
-        keywords = [
-            "nên",
-            "phù hợp",
-            "gợi ý",
-            "so sánh",
-            "đánh giá",
-            "phân tích",
-            "tổng hợp",
-            "giải thích",
-            "theo bạn",
-            "vì sao",
-            "như thế nào"
-        ]
-        return any(k in q for k in keywords)
-
-    # ==================================================
-    # 🎯 SCORE THRESHOLD
-    # ==================================================
-    def apply_score_threshold(self, docs):
-        if not docs:
-            return []
-        best_score = max(d.get("score", 0) for d in docs)
-        return docs if best_score >= SCORE_THRESHOLD else []
-
-    # ==================================================
-    # 🏛️ LIBRARY CONTEXT
-    # ==================================================
-    def _build_library_context(self) -> dict:
-        return {
-            "opening_hours": LIBRARY_INFO["opening_hours"],
-            "library_rules": "\n".join(f"- {r}" for r in LIBRARY_INFO["library_rules"]),
-            "borrow_policy": "\n".join(
-                f"- {k}: {v}" for k, v in LIBRARY_INFO["borrow_policy"].items()
-            ),
-            "penalty_policy": "\n".join(
-                f"- {k}: {v}" for k, v in LIBRARY_INFO["penalty_policy"].items()
-            ),
-        }
-
-    # ==================================================
-    # 🤖 FALLBACK (NO HALLUCINATION)
-    # ==================================================
-    def gemini_fallback(self, question: str) -> str:
-        prompt = f"""
-Bạn là trợ lý thư viện AI.
-
-Thư viện KHÔNG có dữ liệu phù hợp cho câu hỏi:
-"{question}"
-
-Yêu cầu:
-- Nói rõ không có dữ liệu
-- KHÔNG bịa tên sách
-- Có thể gợi ý chung
-"""
-        return self._genai_generate(prompt)
-
-    # ==================================================
-    # 🤖 MAIN ROUTER
+    # 🤖 MAIN
     # ==================================================
     def generate_answer(self, question: str) -> str:
 
-        # 1. Garbage
+        # 🔁 Clear context command
+        if question.lower() in ["/new", "/clear", "new chat", "clear context"]:
+            self.clear_context()
+            return "🆕 Đã bắt đầu một cuộc trò chuyện mới."
+
+        # Garbage
         if self.is_garbage_query(question):
-            return "❌ Câu hỏi không hợp lệ hoặc quá ngắn."
+            return "❌ Câu hỏi không hợp lệ."
 
-        # 2. Thống kê (NO LLM)
+        # Embed query
+        q_vec = self.embedder.embed_text(question, is_query=True)
+
+        # 1️⃣ USER VECTOR MEMORY
+        cached = self.vector_db.search_user_memory(
+            self.user_id, q_vec, threshold=0.90
+        )
+        if cached:
+            return f"⚡ (ghi nhớ)\n{cached}"
+
+        # 2️⃣ STATS
         if self.is_library_stats_query(question):
-            total = self.search_engine.vector_db.get_collection_stats().get("count", 0)
-            return f"📚 Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
+            total = self.vector_db.get_collection_stats()["count"]
+            answer = f"📚 Thư viện hiện có **{total} cuốn sách**."
+            self.vector_db.add_user_memory(
+                self.user_id, question, q_vec, answer
+            )
+            return answer
 
-        # 3. Thông tin thư viện (NO SEARCH)
+        # 3️⃣ LIBRARY INFO
         if self.is_library_info_query(question):
-            ctx = self._build_library_context()
+            ctx = {
+                "opening_hours": LIBRARY_INFO["opening_hours"],
+                "library_rules": "\n".join(f"- {r}" for r in LIBRARY_INFO["library_rules"]),
+                "borrow_policy": "\n".join(
+                    f"- {k}: {v}" for k, v in LIBRARY_INFO["borrow_policy"].items()
+                ),
+                "penalty_policy": "\n".join(
+                    f"- {k}: {v}" for k, v in LIBRARY_INFO["penalty_policy"].items()
+                ),
+            }
             prompt = f"""{SYSTEM_PROMPT}
 
 {USER_PROMPT_TEMPLATE.format(
@@ -212,71 +151,38 @@ Yêu cầu:
     **ctx
 )}
 """
-            return self._genai_generate(prompt)
+            answer = self._genai_generate(prompt)
+            self.vector_db.add_user_memory(
+                self.user_id, question, q_vec, answer
+            )
+            return answer
 
-        # 4. Follow-up
+        # 4️⃣ FOLLOW-UP (no cache)
         if self.is_followup_query(question):
             return self.answer_followup(question)
 
-        # 5. Book search (RAG)
-        raw_docs = self.search_engine.search(
+        # 5️⃣ RAG
+        docs = self.search_engine.search(
             query=question,
             top_k=self.top_k * SEARCH_EXPAND_FACTOR
         )
-        docs = self.apply_score_threshold(raw_docs)
-
         if docs:
             self.last_docs = docs[:self.top_k]
+            lines = [
+                f"{i}. {d['title']} – {d['authors']} ({d['published_year']})"
+                for i, d in enumerate(self.last_docs, 1)
+            ]
+            answer = "📚 Danh sách sách liên quan\n\n" + "\n".join(lines)
+            self.vector_db.add_user_memory(
+                self.user_id, question, q_vec, answer
+            )
+            return answer
 
-            book_lines = []
-            reasons = []
-
-            for i, d in enumerate(self.last_docs, start=1):
-                book_lines.append(
-                    f"{i}. {d['title']} – {d['authors']} ({d['published_year']})"
-                )
-                reasons.append(
-                    f"- **{d['title']}** phù hợp vì nội dung liên quan trực tiếp đến truy vấn."
-                )
-
-            books_text = "\n".join(book_lines)
-            explain_text = "\n".join(reasons)
-
-            # ❌ KHÔNG tổng hợp nếu không cần
-            if not self.needs_synthesis(question):
-                return f"""📚 Danh sách sách liên quan
-
-{books_text}
-
-🔍 Vì sao chọn các sách này
-{explain_text}
-"""
-
-            # ✅ Chỉ tổng hợp khi cần
-            ctx = self._build_library_context()
-            prompt = f"""{SYSTEM_PROMPT}
-
-{USER_PROMPT_TEMPLATE.format(
-    question=question,
-    books=books_text,
-    **ctx
-)}
-
-Giải thích vì sao chọn sách:
-{explain_text}
-"""
-            synthesis = self._genai_generate(prompt)
-
-            return f"""📚 Danh sách sách liên quan
-
-{books_text}
-
-🔍 Vì sao chọn các sách này
-{explain_text}
-
-📝 Tổng hợp
-{synthesis}
-"""
-
-        # 6. Fallback
-        return self.gemini_fallback(question)
+        # 6️⃣ FALLBACK
+        answer = self._genai_generate(
+            f"Trả lời ngắn gọn:\n{question}"
+        )
+        self.vector_db.add_user_memory(
+            self.user_id, question, q_vec, answer
+        )
+        return answer
