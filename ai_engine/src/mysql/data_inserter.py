@@ -4,6 +4,7 @@ from typing import Optional, List
 
 from src.database import get_db
 
+# Get logger (will use centralized config)
 logger = logging.getLogger("DataInserter")
 
 
@@ -97,7 +98,7 @@ class DataInserter:
             """, (
                 isbn,
                 title,
-                description[:500] if description else None,  # Limit length
+                description if description else None,  # Full description
                 publish_year,
                 language,
                 cover_url,
@@ -304,3 +305,39 @@ class DataInserter:
         # Fallback to first shelf
         return 1
     
+    def _link_book_category(self, book_id: int, category_id: int):
+        """Link book to category (N-N)"""
+        try:
+            self.cursor.execute("""
+                INSERT IGNORE INTO book_categories (book_id, category_id)
+                VALUES (%s, %s)
+            """, (book_id, category_id))
+        except Exception as e:
+            logger.error(f"Failed to link category: {e}")
+    
+    def _link_book_author(self, book_id: int, author_id: int):
+        """Link book to author (N-N)"""
+        try:
+            self.cursor.execute("""
+                INSERT IGNORE INTO book_authors (book_id, author_id)
+                VALUES (%s, %s)
+            """, (book_id, author_id))
+        except Exception as e:
+            logger.error(f"Failed to link author: {e}")
+    
+    def print_stats(self):
+        """Print insertion statistics"""
+        print("\n" + "="*60)
+        print("DATA INSERTION STATISTICS")
+        print("="*60)
+        print(f"Books inserted:      {self.stats['books_inserted']}")
+        print(f"Books skipped:       {self.stats['books_skipped']}")
+        print(f"Publishers created:  {self.stats['publishers_created']}")
+        print(f"Categories created:  {self.stats['categories_created']}")
+        print(f"Authors created:     {self.stats['authors_created']}")
+        print("="*60 + "\n")
+    
+    def close(self):
+        """Close database connection"""
+        self.cursor.close()
+        self.conn.close()
