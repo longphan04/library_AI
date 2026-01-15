@@ -2,18 +2,18 @@ import os
 import re
 import json
 import logging
-import google.generativeai as genai
+import google.genai as genai
+from typing import List, Dict
 
 from ..search_engine import SearchEngine
 from .prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
 
-# --------------------------------------------------
+# ==========================
 # CONFIG
-# --------------------------------------------------
+# ==========================
 DEFAULT_TOP_K = 5
+SEARCH_EXPAND_FACTOR = 3
 SCORE_THRESHOLD = 0.80
-
-genai.configure(api_key=os.getenv("OPENAI_API_KEY"))
 
 logger = logging.getLogger("RAGEngine")
 
@@ -22,70 +22,129 @@ class RAGEngine:
     def __init__(self, top_k: int = DEFAULT_TOP_K):
         self.search_engine = SearchEngine()
         self.top_k = top_k
-        self.model = genai.GenerativeModel("gemini-3-flash-preview")
+
+        # Gemini client (stable)
+        self.client = genai.Client(
+            api_key=os.getenv("GOOGLE_API_KEY")
+        )
+
+        # Memory cho follow-up
+        self.last_docs: List[Dict] = []
 
     # ==================================================
-    # 🚫 CHẶN QUERY RÁC
+    # 🔧 GEMINI HELPER (STABLE – NO CONFIG)
+    # ==================================================
+    def _genai_generate(self, prompt: str) -> str:
+        resp = self.client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        return resp.text.strip() if resp and resp.text else ""
+
+    # ==================================================
+    # 🚫 GARBAGE FILTER
     # ==================================================
     def is_garbage_query(self, query: str) -> bool:
         if not query or not query.strip():
             return True
-
         q = query.strip().lower()
-
         if len(q) < 3:
             return True
         if q.isdigit():
             return True
         if not re.search(r"[a-zA-ZÀ-ỹ]", q):
             return True
-        if re.fullmatch(r"(.)\1{3,}", q):
-            return True
-
         return False
 
     # ==================================================
-    # 🧠 PHÂN LOẠI CÂU HỎI (LLM)
+    # 📊 THỐNG KÊ THƯ VIỆN
     # ==================================================
-    def classify_question(self, question: str) -> dict:
-        prompt = f"""
-Chỉ trả lời JSON, không giải thích.
-
-Câu hỏi:
-"{question}"
-
-Xác định:
-- is_book_query: true | false
-- number_of_books: số nguyên hoặc null
-"""
-        resp = self.model.generate_content(
-            prompt,
-            generation_config={"temperature": 0}
-        )
-
-        try:
-            return json.loads(resp.text.strip())
-        except Exception:
-            return {"is_book_query": False, "number_of_books": None}
+    def is_library_stats_query(self, question: str) -> bool:
+        q = question.lower()
+        keywords = [
+            "bao nhiêu sách",
+            "bao nhiêu cuốn",
+            "tổng số sách",
+            "số lượng sách",
+            "thư viện có bao nhiêu"
+        ]
+        return any(k in q for k in keywords)
 
     # ==================================================
-    # 🏛️ BUILD CONTEXT THƯ VIỆN (FIX KEYERROR)
+    # 🏛️ THÔNG TIN THƯ VIỆN
     # ==================================================
-    def _build_library_context(self) -> dict:
-        return {
-            "opening_hours": LIBRARY_INFO["opening_hours"],
-            "library_rules": "\n".join(
-                f"- {r}" for r in LIBRARY_INFO["library_rules"]
-            ),
-            "borrow_policy": "\n".join(
-                f"- {k}: {v}"
-                for k, v in LIBRARY_INFO["borrow_policy"].items()
-            ),
-            "penalty_policy": "\n".join(
-                f"- {k}: {v}"
-                for k, v in LIBRARY_INFO["penalty_policy"].items()
-            ),
-        }
+    def is_library_info_query(self, question: str) -> bool:
+        q = question.lower()
+        keywords = [
+            "mở cửa",
+            "đóng cửa",
+            "giờ mở",
+            "giờ đóng",
+            "giờ làm việc",
+            "nội quy",
+            "quy định",
+            "mượn sách",
+            "trả sách",
+            "gia hạn",
+            "phí phạt"
+        ]
+        return any(k in q for k in keywords)
+
+    # ==================================================
+    # 🧠 FOLLOW-UP (CUỐN THỨ 2, CUỐN ĐÓ…)
+    # ==================================================
+    def is_followup_query(self, question: str) -> bool:
+        if not self.last_docs:
+            return False
+        q = question.lower()
+        patterns = [
+            "cuốn này",
+            "cuốn đó",
+            "cuốn thứ",
+            "sách này",
+            "sách đó"
+        ]
+        return any(p in q for p in patterns)
+
+    def answer_followup(self, question: str) -> str:
+        q = question.lower()
+        idx = None
+
+        match = re.search(r"thứ\s*(\d+)", q)
+        if match:
+            idx = int(match.group(1)) - 1
+
+        if idx is not None and 0 <= idx < len(self.last_docs):
+            book = self.last_docs[idx]
+            return (
+                f"📘 **{book['title']}**\n"
+                f"- Tác giả: {book['authors']}\n"
+                f"- Năm xuất bản: {book['published_year']}\n"
+                f"- Thể loại: {book.get('category','')}\n\n"
+                f"📝 Tóm tắt:\n{book.get('snippet','')}"
+            )
+
+        return "❌ Tôi không xác định được cuốn sách bạn đang hỏi."
+
+    # ==================================================
+    # 🧠 CÓ CẦN TỔNG HỢP KHÔNG?
+    # ==================================================
+    def needs_synthesis(self, question: str) -> bool:
+        q = question.lower()
+        keywords = [
+            "nên",
+            "phù hợp",
+            "gợi ý",
+            "so sánh",
+            "đánh giá",
+            "phân tích",
+            "tổng hợp",
+            "giải thích",
+            "theo bạn",
+            "vì sao",
+            "như thế nào"
+        ]
+        return any(k in q for k in keywords)
 
     # ==================================================
     # 🎯 SCORE THRESHOLD
@@ -93,79 +152,131 @@ Xác định:
     def apply_score_threshold(self, docs):
         if not docs:
             return []
-
         best_score = max(d.get("score", 0) for d in docs)
         return docs if best_score >= SCORE_THRESHOLD else []
 
     # ==================================================
-    # 🤖 GENERATE ANSWER
+    # 🏛️ LIBRARY CONTEXT
+    # ==================================================
+    def _build_library_context(self) -> dict:
+        return {
+            "opening_hours": LIBRARY_INFO["opening_hours"],
+            "library_rules": "\n".join(f"- {r}" for r in LIBRARY_INFO["library_rules"]),
+            "borrow_policy": "\n".join(
+                f"- {k}: {v}" for k, v in LIBRARY_INFO["borrow_policy"].items()
+            ),
+            "penalty_policy": "\n".join(
+                f"- {k}: {v}" for k, v in LIBRARY_INFO["penalty_policy"].items()
+            ),
+        }
+
+    # ==================================================
+    # 🤖 FALLBACK (NO HALLUCINATION)
+    # ==================================================
+    def gemini_fallback(self, question: str) -> str:
+        prompt = f"""
+Bạn là trợ lý thư viện AI.
+
+Thư viện KHÔNG có dữ liệu phù hợp cho câu hỏi:
+"{question}"
+
+Yêu cầu:
+- Nói rõ không có dữ liệu
+- KHÔNG bịa tên sách
+- Có thể gợi ý chung
+"""
+        return self._genai_generate(prompt)
+
+    # ==================================================
+    # 🤖 MAIN ROUTER
     # ==================================================
     def generate_answer(self, question: str) -> str:
 
+        # 1. Garbage
         if self.is_garbage_query(question):
             return "❌ Câu hỏi không hợp lệ hoặc quá ngắn."
 
-        intent = self.classify_question(question)
-        is_book_query = intent.get("is_book_query", False)
-        number_of_books = intent.get("number_of_books")
+        # 2. Thống kê (NO LLM)
+        if self.is_library_stats_query(question):
+            total = self.search_engine.vector_db.get_collection_stats().get("count", 0)
+            return f"📚 Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
 
-        library_ctx = self._build_library_context()
-
-        # ------------------------------
-        # KHÔNG PHẢI HỎI SÁCH
-        # ------------------------------
-        if not is_book_query:
+        # 3. Thông tin thư viện (NO SEARCH)
+        if self.is_library_info_query(question):
+            ctx = self._build_library_context()
             prompt = f"""{SYSTEM_PROMPT}
 
 {USER_PROMPT_TEMPLATE.format(
     question=question,
     books="(Không áp dụng)",
-    **library_ctx
+    **ctx
 )}
 """
-            resp = self.model.generate_content(
-                prompt,
-                generation_config={"temperature": 0.2, "max_output_tokens": 512}
-            )
-            return resp.text.strip()
+            return self._genai_generate(prompt)
 
-        # ------------------------------
-        # HỎI SÁCH
-        # ------------------------------
-        top_k = number_of_books if number_of_books else self.top_k
-        docs = self.search_engine.search(query=question, top_k=top_k)
-        docs = self.apply_score_threshold(docs)
+        # 4. Follow-up
+        if self.is_followup_query(question):
+            return self.answer_followup(question)
 
-        if not docs:
-            return "❌ Không có kết quả sách phù hợp."
+        # 5. Book search (RAG)
+        raw_docs = self.search_engine.search(
+            query=question,
+            top_k=self.top_k * SEARCH_EXPAND_FACTOR
+        )
+        docs = self.apply_score_threshold(raw_docs)
 
-        book_lines = []
-        for i, d in enumerate(docs, start=1):
-            book_lines.append(
-                f"{i}. {d['title']} – {d['authors']} ({d['published_year']})"
-            )
+        if docs:
+            self.last_docs = docs[:self.top_k]
 
-        books_text = "\n".join(book_lines)
+            book_lines = []
+            reasons = []
 
-        prompt = f"""{SYSTEM_PROMPT}
+            for i, d in enumerate(self.last_docs, start=1):
+                book_lines.append(
+                    f"{i}. {d['title']} – {d['authors']} ({d['published_year']})"
+                )
+                reasons.append(
+                    f"- **{d['title']}** phù hợp vì nội dung liên quan trực tiếp đến truy vấn."
+                )
+
+            books_text = "\n".join(book_lines)
+            explain_text = "\n".join(reasons)
+
+            # ❌ KHÔNG tổng hợp nếu không cần
+            if not self.needs_synthesis(question):
+                return f"""📚 Danh sách sách liên quan
+
+{books_text}
+
+🔍 Vì sao chọn các sách này
+{explain_text}
+"""
+
+            # ✅ Chỉ tổng hợp khi cần
+            ctx = self._build_library_context()
+            prompt = f"""{SYSTEM_PROMPT}
 
 {USER_PROMPT_TEMPLATE.format(
     question=question,
     books=books_text,
-    **library_ctx
+    **ctx
 )}
+
+Giải thích vì sao chọn sách:
+{explain_text}
 """
-        resp = self.model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.2, "max_output_tokens": 512}
-        )
+            synthesis = self._genai_generate(prompt)
 
-        explanation = resp.text.strip() if resp and resp.text else ""
-
-        return f"""📚 Danh sách sách liên quan
+            return f"""📚 Danh sách sách liên quan
 
 {books_text}
 
-📝 Nhận xét
-{explanation}
+🔍 Vì sao chọn các sách này
+{explain_text}
+
+📝 Tổng hợp
+{synthesis}
 """
+
+        # 6. Fallback
+        return self.gemini_fallback(question)
