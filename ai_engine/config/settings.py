@@ -33,9 +33,8 @@ class Settings:
     
     # MODEL EMBEDDING
     EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-base"
-    VECTOR_DIMENSION = 768
-    
-    # DATABASE (MySQL)
+    VECTOR_DIMENSION = 786
+
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = int(os.getenv("DB_PORT", 3307))
     DB_USER = os.getenv("DB_USER", "root")

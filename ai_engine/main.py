@@ -12,36 +12,44 @@ setup_logging(command, log_to_file=True)
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
 from src.indexer import Indexer
+from src.rag.chat import main as chat_main
+
 
 def main():
     parser = argparse.ArgumentParser(description="AI Engine")
-    parser.add_argument("command", choices=[
-        "crawl", 
-        "process", 
-        "index",
-        "sync-to-mysql"
-    ], 
-        help="crawl: Tải raw data | process: Làm sạch | index: Vector hóa | sync-to-mysql: Đồng bộ MySQL"
+    parser.add_argument(
+        "command",
+        choices=[
+            "crawl",
+            "process",
+            "index",
+            "chat",
+            "sync-to-mysql"
+        ],
+        help="crawl | process | index | chat | sync-to-mysql"
     )
-    
+
     args = parser.parse_args()
 
     if args.command == "crawl":
         crawler = GoogleBooksCrawler()
         crawler.run()
-        
+
     elif args.command == "process":
         run_processor()
-        
+
     elif args.command == "index":
-        print(">>> RUNNING INDEXER")
         indexer = Indexer()
         indexer.run_indexing()
-    
+
     elif args.command == "sync-to-mysql":
         print(">>> SYNCING TO MYSQL")
         from src.mysql.sync_data import sync_to_mysql
         sync_to_mysql()
+
+    elif args.command == "chat":
+        chat_main()
+
 
 if __name__ == "__main__":
     main()

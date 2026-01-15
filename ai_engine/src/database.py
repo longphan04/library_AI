@@ -5,9 +5,10 @@ from config.settings import settings
 
 logger = logging.getLogger("Database")
 
+
 class DatabaseConnection:
     _pool = None
-    
+
     @classmethod
     def get_pool(cls):
         if cls._pool is None:
@@ -23,11 +24,12 @@ class DatabaseConnection:
             )
             logger.info("Database connection pool created")
         return cls._pool
-    
+
     @classmethod
     def get_connection(cls):
         pool = cls.get_pool()
         return pool.get_connection()
+
 
 # Usage example
 def get_db():
