@@ -29,6 +29,6 @@ def main():
     elif args.command == "chat":
         chat_main()
 
-
+# test
 if __name__ == "__main__":
     main()
