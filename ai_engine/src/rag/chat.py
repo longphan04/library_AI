@@ -8,10 +8,7 @@ def main():
     # top_k = 5 nghĩa là mỗi lần hỏi sẽ lấy 5 document gần nhất trong vector DB
     rag = RAGEngine(top_k=5)
 
-    # ===============================
-    # 2️⃣ HIỂN THỊ TIÊU ĐỀ CHƯƠNG TRÌNH
-    # ===============================
-    print("📚 AI Library RAG Chatbot")
+    print("AI Library RAG Chatbot")
     print("Gõ 'exit' để thoát\n")
 
     # ===============================
@@ -33,14 +30,8 @@ def main():
     # 5️⃣ VÒNG LẶP CHAT CHÍNH
     # ===============================
     while True:
-        # Nhận input từ người dùng
-        user_input = input("👤 Bạn: ").strip()
-
-        # ===============================
-        # 5.1️⃣ THOÁT CHƯƠNG TRÌNH
-        # ===============================
-        if user_input.lower() in ["exit", "quit"]:
-            print("👋 Tạm biệt!")
+        question = input("Ban: ")
+        if question.lower() in ["exit", "quit"]:
             break
 
         # ===============================
@@ -74,10 +65,7 @@ def main():
         #   - Gửi context + question cho LLM
         answer = rag.generate_answer(question)
 
-        # ===============================
-        # 7️⃣ HIỂN THỊ KẾT QUẢ
-        # ===============================
-        print("\n🤖 Bot:")
+        print("\nBot:")
         print(answer)
         print("-" * 60)
 

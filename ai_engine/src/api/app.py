@@ -33,7 +33,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config.settings import settings
-from src.db_factory import get_search_engine as factory_get_search_engine, get_database as factory_get_database
+from src.search_engine import SearchEngine
+from src.database import get_db
 from src.indexer import Indexer
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
@@ -59,19 +60,20 @@ _singletons_lock = threading.Lock()
 
 
 def get_search_engine() -> Any:
-    """Return a SearchEngine instance from the factory. Uses a singleton for the process."""
+    """Return a SearchEngine instance. Uses a singleton for the process."""
     with _singletons_lock:
         if "search_engine" not in _singletons:
-            logger.info("Initializing SearchEngine via factory (lazy)...")
-            _singletons["search_engine"] = factory_get_search_engine()
+            logger.info("Initializing SearchEngine (lazy)...")
+            _singletons["search_engine"] = SearchEngine()
         return _singletons["search_engine"]
 
 
 def get_database() -> Any:
+    """Return database connection. Uses a singleton for the process."""
     with _singletons_lock:
         if "database" not in _singletons:
-            logger.info("Initializing Database via factory (lazy)...")
-            _singletons["database"] = factory_get_database()
+            logger.info("Initializing Database connection (lazy)...")
+            _singletons["database"] = get_db()
         return _singletons["database"]
 
 

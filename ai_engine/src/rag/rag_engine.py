@@ -5,23 +5,20 @@ import logging
 import google.genai as genai
 from typing import List, Dict
 
-from ..search_engine import SearchEngine
-from .prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
+from src.search_engine import SearchEngine
+from src.rag.prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
+from config.rag_config import (
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    DEFAULT_TOP_K,
+    SCORE_THRESHOLD,
+    MIN_QUERY_LENGTH,
+    TEMPERATURE,
+    MAX_OUTPUT_TOKENS
+)
 
-# =========================================================
-# 🔧 GLOBAL CONFIG
-# =========================================================
-# Số document tối đa dùng để trả lời
-DEFAULT_TOP_K = 5
-
-# Khi search sẽ lấy top_k * factor để tăng recall, sau đó lọc lại
-SEARCH_EXPAND_FACTOR = 3
-
-# Nếu score cao nhất < ngưỡng này → coi như không có kết quả phù hợp
-SCORE_THRESHOLD = 0.80
-
-# Ngưỡng rất cao để dùng query cache (tránh trả lời sai ngữ cảnh)
-QUERY_CACHE_THRESHOLD = 0.95
+# Configure Gemini API
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Logger cho module RAG
 logger = logging.getLogger("RAGEngine")
@@ -49,36 +46,10 @@ class RAGEngine:
         self.embedder = self.search_engine.embedder
         self.vector_db = self.search_engine.vector_db
         self.top_k = top_k
-
-        # ===============================
-        # 2️⃣ GEMINI CLIENT (Stable SDK)
-        # ===============================
-        self.client = genai.Client(
-            api_key=os.getenv("GOOGLE_API_KEY")
-        )
-
-        # ===============================
-        # 3️⃣ FOLLOW-UP MEMORY (RAM ONLY)
-        # ===============================
-        # Lưu danh sách sách của câu hỏi trước để trả lời kiểu:
-        # "cuốn thứ 2", "cuốn này", ...
-        self.last_docs: List[Dict] = []
+        self.model = genai.GenerativeModel(GEMINI_MODEL)
 
     # ==================================================
-    # 🔧 GEMINI HELPER
-    # ==================================================
-    def _genai_generate(self, prompt: str) -> str:
-        """
-        Wrapper gọi Gemini API để sinh text
-        """
-        resp = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        return resp.text.strip() if resp and resp.text else ""
-
-    # ==================================================
-    # 🚫 GARBAGE QUERY FILTER
+    # FILTER GARBAGE QUERIES
     # ==================================================
     def is_garbage_query(self, query: str) -> bool:
         """
@@ -93,7 +64,9 @@ class RAGEngine:
 
         q = query.strip().lower()
 
-        if len(q) < 3 or q.isdigit():
+        if len(q) < MIN_QUERY_LENGTH:
+            return True
+        if q.isdigit():
             return True
 
         # Không có chữ cái (kể cả tiếng Việt)
@@ -269,20 +242,7 @@ Yêu cầu:
         return self._genai_generate(prompt)
 
     # ==================================================
-    # 💡 CÂU HỎI GỢI Ý BAN ĐẦU
-    # ==================================================
-    def get_suggested_questions(self) -> List[str]:
-        return [
-            "Tìm sách IT?",
-            "Sách mới nhất?",
-            "Sách về kinh tế – tài chính?",
-            "Mấy giờ thư viện mở cửa?",
-            "Có bao nhiêu cuốn sách trong thư viện?",
-            "Gợi ý sách về trí tuệ nhân tạo",
-        ]
-
-    # ==================================================
-    # 🤖 HÀM CHÍNH: PIPELINE XỬ LÝ QUESTION
+    # GENERATE ANSWER
     # ==================================================
     def generate_answer(self, question: str) -> str:
 
@@ -331,10 +291,12 @@ Yêu cầu:
     **ctx
 )}
 """
-            answer = self._genai_generate(prompt)
-
-            self.vector_db.add_query_memory(
-                question, q_vec, answer, qtype="library_info"
+            resp = self.model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": TEMPERATURE, 
+                    "max_output_tokens": MAX_OUTPUT_TOKENS
+                }
             )
             return answer
 
@@ -391,9 +353,17 @@ Yêu cầu:
     **ctx
 )}
 """
-            synthesis = self._genai_generate(prompt)
+        resp = self.model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": TEMPERATURE,
+                "max_output_tokens": MAX_OUTPUT_TOKENS
+            }
+        )
 
-            answer = f"""📚 Danh sách sách liên quan
+        explanation = resp.text.strip() if resp and resp.text else ""
+
+        return f"""Danh sách sách liên quan
 
 {books_text}
 

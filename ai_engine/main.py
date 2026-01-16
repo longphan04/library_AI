@@ -1,7 +1,6 @@
 import argparse
 import sys
 
-# CRITICAL: Setup logging FIRST, before importing any other modules
 from config.logging_config import setup_logging
 
 # Determine command from args
@@ -24,9 +23,10 @@ def main():
             "process",
             "index",
             "chat",
-            "sync-to-mysql"
+            "sync-to-mysql",
+            "api"
         ],
-        help="crawl | process | index | chat | sync-to-mysql"
+        help="crawl | process | index | chat | sync-to-mysql | api"
     )
 
     args = parser.parse_args()
@@ -49,6 +49,12 @@ def main():
 
     elif args.command == "chat":
         chat_main()
+
+    elif args.command == "api":
+        print(">>> STARTING API SERVER on http://0.0.0.0:9999")
+        print(">>> Use Ctrl+C to stop")
+        from src.api.app import run
+        run(host="0.0.0.0", port=9999, debug=False)
 
 
 if __name__ == "__main__":
