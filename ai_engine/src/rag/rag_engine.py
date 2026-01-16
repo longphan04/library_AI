@@ -40,7 +40,7 @@ class RAGEngine:
 
     def __init__(self, top_k: int = DEFAULT_TOP_K):
         # ===============================
-        # 1️⃣ SEARCH ENGINE (Vector DB + Embedder)
+        # ️⃣ SEARCH ENGINE (Vector DB + Embedder)
         # ===============================
         self.search_engine = SearchEngine()
         self.embedder = self.search_engine.embedder
@@ -124,7 +124,7 @@ class RAGEngine:
     def is_followup_query(self, question: str) -> bool:
         """
         Ví dụ:
-        - "Cuốn thứ 2 thì sao?"
+        - "Cuốn thứ thì sao?"
         - "Cuốn này ai viết?"
         """
         if not self.last_docs:
@@ -149,9 +149,7 @@ class RAGEngine:
         if not match:
             return "❌ Tôi chưa xác định được cuốn sách bạn đang hỏi."
 
-        idx = int(match.group(1)) - 1
-
-        if 0 <= idx < len(self.last_docs):
+        idx = int(match.group()) - if <= idx < len(self.last_docs):
             b = self.last_docs[idx]
             return (
                 f"📘 **{b['title']}**\n"
@@ -199,7 +197,7 @@ class RAGEngine:
         if not docs:
             return []
 
-        best = max(d.get("score", 0) for d in docs)
+        best = max(d.get("score", ) for d in docs)
         return docs if best >= SCORE_THRESHOLD else []
 
     # ==================================================
@@ -247,13 +245,13 @@ Yêu cầu:
     def generate_answer(self, question: str) -> str:
 
         # ==================================================
-        # 0️⃣ CHẶN CÂU HỎI RÁC
+        # ️⃣ CHẶN CÂU HỎI RÁC
         # ==================================================
         if self.is_garbage_query(question):
             return "❌ Câu hỏi không hợp lệ hoặc quá ngắn."
 
         # ==================================================
-        # 1️⃣ QUERY MEMORY (CACHE CÂU HỎI CŨ)
+        # ️⃣ QUERY MEMORY (CACHE CÂU HỎI CŨ)
         # ==================================================
         q_vec = self.embedder.embed_text(question, is_query=True)
 
@@ -266,10 +264,10 @@ Yêu cầu:
                 return f"⚡ {cached}"
 
         # ==================================================
-        # 2️⃣ THỐNG KÊ
+        # ️⃣ THỐNG KÊ
         # ==================================================
         if self.is_library_stats_query(question):
-            total = self.vector_db.get_collection_stats().get("count", 0)
+            total = self.vector_db.get_collection_stats().get("count", )
             answer = f"📚 Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
 
             self.vector_db.add_query_memory(
@@ -278,7 +276,7 @@ Yêu cầu:
             return answer
 
         # ==================================================
-        # 3️⃣ NỘI QUY / GIỜ GIẤC
+        # ️⃣ NỘI QUY / GIỜ GIẤC
         # ==================================================
         if self.is_library_info_query(question):
             ctx = self._build_library_context()
@@ -301,13 +299,13 @@ Yêu cầu:
             return answer
 
         # ==================================================
-        # 4️⃣ FOLLOW-UP (KHÔNG CACHE)
+        # ️⃣ FOLLOW-UP (KHÔNG CACHE)
         # ==================================================
         if self.is_followup_query(question):
             return self.answer_followup(question)
 
         # ==================================================
-        # 5️⃣ BOOK RAG PIPELINE
+        # ️⃣ BOOK RAG PIPELINE
         # ==================================================
         raw_docs = self.search_engine.search(
             query=question,
@@ -324,13 +322,13 @@ Yêu cầu:
             # Build danh sách sách
             book_lines = [
                 f"{i}. {d['title']} – {d['authors']} ({d['published_year']})"
-                for i, d in enumerate(self.last_docs, 1)
+                for i, d in enumerate(self.last_docs, )
             ]
 
             books_text = "\n".join(book_lines)
 
             # ==================================================
-            # 5.1️⃣ CHỈ LIST, KHÔNG TỔNG HỢP
+            # .️⃣ CHỈ LIST, KHÔNG TỔNG HỢP
             # ==================================================
             if not self.needs_synthesis(question):
                 answer = f"📚 Danh sách sách liên quan\n\n{books_text}"
@@ -341,7 +339,7 @@ Yêu cầu:
                 return answer
 
             # ==================================================
-            # 5.2️⃣ CÓ GỌI LLM ĐỂ TỔNG HỢP
+            # .️⃣ CÓ GỌI LLM ĐỂ TỔNG HỢP
             # ==================================================
             ctx = self._build_library_context()
 
@@ -376,7 +374,7 @@ Yêu cầu:
             return answer
 
         # ==================================================
-        # 6️⃣ FALLBACK: KHÔNG CÓ DATA
+        # ️⃣ FALLBACK: KHÔNG CÓ DATA
         # ==================================================
         answer = self.gemini_fallback(question)
 
