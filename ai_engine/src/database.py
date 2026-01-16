@@ -20,7 +20,6 @@ class DatabaseConnection:
                 user=settings.DB_USER,
                 password=settings.DB_PASSWORD,
                 database=settings.DB_NAME,
-                allow_public_key_retrieval=True,  # Fix for MySQL 8.0+
                 autocommit=False
             )
             logger.info("Database connection pool created")

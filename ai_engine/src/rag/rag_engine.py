@@ -4,16 +4,20 @@ import json
 import logging
 import google.generativeai as genai
 
-from ..search_engine import SearchEngine
-from .prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
+from src.search_engine import SearchEngine
+from src.rag.prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
+from config.rag_config import (
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    DEFAULT_TOP_K,
+    SCORE_THRESHOLD,
+    MIN_QUERY_LENGTH,
+    TEMPERATURE,
+    MAX_OUTPUT_TOKENS
+)
 
-# --------------------------------------------------
-# CONFIG
-# --------------------------------------------------
-DEFAULT_TOP_K = 5
-SCORE_THRESHOLD = 0.80
-
-genai.configure(api_key=os.getenv("OPENAI_API_KEY"))
+# Configure Gemini API
+genai.configure(api_key=GEMINI_API_KEY)
 
 logger = logging.getLogger("RAGEngine")
 
@@ -22,10 +26,10 @@ class RAGEngine:
     def __init__(self, top_k: int = DEFAULT_TOP_K):
         self.search_engine = SearchEngine()
         self.top_k = top_k
-        self.model = genai.GenerativeModel("gemini-3-flash-preview")
+        self.model = genai.GenerativeModel(GEMINI_MODEL)
 
     # ==================================================
-    # 🚫 CHẶN QUERY RÁC
+    # FILTER GARBAGE QUERIES
     # ==================================================
     def is_garbage_query(self, query: str) -> bool:
         if not query or not query.strip():
@@ -33,7 +37,7 @@ class RAGEngine:
 
         q = query.strip().lower()
 
-        if len(q) < 3:
+        if len(q) < MIN_QUERY_LENGTH:
             return True
         if q.isdigit():
             return True
@@ -98,7 +102,7 @@ Xác định:
         return docs if best_score >= SCORE_THRESHOLD else []
 
     # ==================================================
-    # 🤖 GENERATE ANSWER
+    # GENERATE ANSWER
     # ==================================================
     def generate_answer(self, question: str) -> str:
 
@@ -125,7 +129,10 @@ Xác định:
 """
             resp = self.model.generate_content(
                 prompt,
-                generation_config={"temperature": 0.2, "max_output_tokens": 512}
+                generation_config={
+                    "temperature": TEMPERATURE, 
+                    "max_output_tokens": MAX_OUTPUT_TOKENS
+                }
             )
             return resp.text.strip()
 
@@ -157,12 +164,15 @@ Xác định:
 """
         resp = self.model.generate_content(
             prompt,
-            generation_config={"temperature": 0.2, "max_output_tokens": 512}
+            generation_config={
+                "temperature": TEMPERATURE,
+                "max_output_tokens": MAX_OUTPUT_TOKENS
+            }
         )
 
         explanation = resp.text.strip() if resp and resp.text else ""
 
-        return f"""📚 Danh sách sách liên quan
+        return f"""Danh sách sách liên quan
 
 {books_text}
 
