@@ -2,11 +2,15 @@ import os
 import glob
 import logging
 import re
+
+from config.settings import settings
+from config.logging_config import get_logger
 from src.embedder import Embedder
 from src.vector_db import VectorDB
-from config.settings import settings
 
-logger = logging.getLogger("Indexer")
+
+# Get logger (config done in main.py)
+logger = get_logger("Indexer")
 
 class Indexer:
     def __init__(self):

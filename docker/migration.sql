@@ -178,7 +178,7 @@ CREATE TABLE shelves (
 -- =========================================================
 CREATE TABLE books (
     book_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    isbn VARCHAR(20) NOT NULL UNIQUE,
+    isbn VARCHAR(20) DEFAULT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT DEFAULT NULL,
     publish_year INT DEFAULT NULL,
@@ -253,23 +253,6 @@ CREATE TABLE book_authors (
         FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE,
     CONSTRAINT fk_ba_author
         FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE RESTRICT
-) ENGINE=InnoDB;
-
--- =========================================================
--- Bảng Book_Images
--- Dùng để: lưu nhiều ảnh cho 1 đầu sách (ngoài cover_url).
--- =========================================================
-CREATE TABLE book_images (
-    image_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    book_id BIGINT NOT NULL,
-    image_url VARCHAR(255) NOT NULL,
-    sort_order INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    INDEX idx_book_images (book_id, sort_order),
-
-    CONSTRAINT fk_book_images_book
-        FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- =========================================================

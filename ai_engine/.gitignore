@@ -1,5 +1,8 @@
 # 1. BẢO MẬT (QUAN TRỌNG NHẤT)
 .env
+**/.env
+.env.*
+**/.env.*
 
 # 2. MÔI TRƯỜNG & THƯ VIỆN
 venv/*
