@@ -33,10 +33,28 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config.settings import settings
-from src.db_factory import get_search_engine as factory_get_search_engine, get_database as factory_get_database
 from src.indexer import Indexer
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
+from src.search_engine import SearchEngine
+from src.database import get_db, DatabaseConnection
+
+
+def factory_get_search_engine() -> Any:
+    """Factory for SearchEngine.
+
+    Kept as a small abstraction so app wiring can change later without touching
+    the singleton accessors.
+    """
+    return SearchEngine()
+
+
+def factory_get_database() -> Any:
+    """Factory for DB connection.
+
+    Returns a MySQL connection from the project's connection pool.
+    """
+    return get_db()
 
 # ---- App & logging ----
 app = Flask(__name__)
