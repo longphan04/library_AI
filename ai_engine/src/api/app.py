@@ -33,11 +33,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config.settings import settings
-from src.search_engine import SearchEngine
+from src.db_factory import get_search_engine as factory_get_search_engine, get_database as factory_get_database
 from src.indexer import Indexer
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
-from src.vector_db import VectorDB
 
 # ---- App & logging ----
 app = Flask(__name__)
@@ -59,20 +58,21 @@ _singletons: Dict[str, Any] = {}
 _singletons_lock = threading.Lock()
 
 
-def get_search_engine() -> SearchEngine:
+def get_search_engine() -> Any:
+    """Return a SearchEngine instance from the factory. Uses a singleton for the process."""
     with _singletons_lock:
         if "search_engine" not in _singletons:
-            logger.info("Initializing SearchEngine (lazy)...")
-            _singletons["search_engine"] = SearchEngine()
+            logger.info("Initializing SearchEngine via factory (lazy)...")
+            _singletons["search_engine"] = factory_get_search_engine()
         return _singletons["search_engine"]
 
 
-def get_vector_db() -> VectorDB:
+def get_database() -> Any:
     with _singletons_lock:
-        if "vector_db" not in _singletons:
-            logger.info("Initializing VectorDB (lazy)...")
-            _singletons["vector_db"] = VectorDB()
-        return _singletons["vector_db"]
+        if "database" not in _singletons:
+            logger.info("Initializing Database via factory (lazy)...")
+            _singletons["database"] = factory_get_database()
+        return _singletons["database"]
 
 
 # ---- Job tracking for background tasks ----
@@ -418,7 +418,8 @@ def api_data_sync():
                 # invalidate cache
                 try:
                     se = get_search_engine()
-                    se.invalidate_cache()
+                    if hasattr(se, "invalidate_cache"):
+                        se.invalidate_cache()
                 except Exception:
                     logger.debug("Could not invalidate cache")
             if act == "crawl":
@@ -459,6 +460,6 @@ def run(host: str = "0.0.0.0", port: int = 9999, debug: bool = False):
 
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "8000"))
+    port = int(os.getenv("FLASK_PORT", "9999"))
     debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
     run(host=host, port=port, debug=debug)
