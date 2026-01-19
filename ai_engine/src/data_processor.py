@@ -155,7 +155,7 @@ class DataProcessor:
             "subtitle": subtitle,
             "authors": authors_str,
             "publisher": info.get("publisher", "Unknown"),
-            "published_year": year,
+            "publish_year": year,
             "category": category_str,
             "language": info.get("language", "en"),
             "thumbnail": thumbnail,

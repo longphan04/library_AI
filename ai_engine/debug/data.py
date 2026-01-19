@@ -5,11 +5,11 @@ se = SearchEngine()
 
 filters = se.get_filters()
 
-print("\n📚 CATEGORIES:")
+print("\nCATEGORIES:")
 print(filters["categories"][:10])
 
-print("\n📅 YEARS:")
+print("\nYEARS:")
 print(filters["years"][:10])
 
-print("\n✍ AUTHORS:")
+print("\nAUTHORS:")
 print(filters["authors"][:10])

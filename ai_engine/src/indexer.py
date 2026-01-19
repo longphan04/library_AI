@@ -61,7 +61,7 @@ class Indexer:
             "title": title,
             "authors": authors,
             "category": category,
-            "published_year": year # Consistent with schema
+            "publish_year": year
         }
         return id_val, meta
 

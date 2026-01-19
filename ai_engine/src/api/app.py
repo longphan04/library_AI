@@ -62,15 +62,15 @@ def _normalize_filters(filters: Optional[Dict]) -> Optional[Dict]:
     f = dict(filters)  # shallow copy
 
     # map common synonyms
-    if "year" in f and "published_year" not in f:
-        f["published_year"] = f.pop("year")
-    if "years" in f and "published_year" not in f:
+    if "year" in f and "publish_year" not in f:
+        f["publish_year"] = f.pop("year")
+    if "years" in f and "publish_year" not in f:
         # accept both list or single value
         yrs = f.pop("years")
         if isinstance(yrs, (list, tuple)) and len(yrs) > 0:
-            f["published_year"] = str(yrs[0])
+            f["publish_year"] = str(yrs[0])
         else:
-            f["published_year"] = str(yrs)
+            f["publish_year"] = str(yrs)
     if "author" in f and "authors" not in f:
         f["authors"] = f.pop("author")
 
@@ -83,7 +83,7 @@ def _normalize_filters(filters: Optional[Dict]) -> Optional[Dict]:
         f["title"] = " ".join([str(t).strip() for t in f["title"] if t])
 
     # ensure string values for exact-match fields
-    for key in ("category", "published_year", "title", "authors"):
+    for key in ("category", "publish_year", "title", "authors"):
         if key in f and f[key] is not None and not isinstance(f[key], str):
             f[key] = str(f[key])
 
@@ -281,11 +281,28 @@ def api_search():
 
 
 @app.route("/ai/recommend/<book_id>", methods=["GET"])
-def api_recommend(book_id: int):
+def api_recommend(book_id):
+    """
+    Recommend similar books based on book_id.
+    book_id có thể là int hoặc string.
+    """
     try:
+        # Convert book_id to string (Vector DB uses string IDs)
+        book_id_str = str(book_id)
+        
         se = get_search_engine()
-        recs = se.recommend(book_id=book_id, top_k=int(request.args.get("top_k", 5)))
-        return success({"book_id": book_id, "recommendations": recs})
+        top_k = int(request.args.get("top_k", 5))
+        
+        recs = se.recommend(book_id=book_id_str, top_k=top_k)
+        
+        if not recs:
+            return success({
+                "book_id": book_id_str,
+                "recommendations": [],
+                "message": f"Book ID '{book_id_str}' not found or no similar books available"
+            })
+        
+        return success({"book_id": book_id_str, "recommendations": recs})
     except Exception as e:
         logger.exception("Recommend failed for %s", book_id)
         return error(str(e), 500)
@@ -425,7 +442,7 @@ def api_chat():
             "title": r.get("title"),
             "authors": r.get("authors"),
             "category": r.get("category"),
-            "published_year": r.get("published_year"),
+            "publish_year": r.get("publish_year"),
             "score": r.get("score"),
             "snippet": r.get("snippet")
         })

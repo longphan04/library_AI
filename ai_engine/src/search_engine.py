@@ -37,7 +37,7 @@ class SearchEngine:
                     "title": "Python",          # Tìm trong tiêu đề (partial match)
                     "authors": "Mark Lutz",     # Tìm tác giả (partial match)
                     "category": "Programming",  # Thể loại (exact match)
-                    "published_year": "2023"    # Năm xuất bản (exact match)
+                    "publish_year": "2023"      # Năm xuất bản (exact match)
                 }
             top_k: Số kết quả trả về
 
@@ -146,7 +146,7 @@ class SearchEngine:
                     "title": meta.get("title", "Unknown"),
                     "authors": meta.get("authors", "Unknown"),
                     "category": meta.get("category", ""),
-                    "published_year": meta.get("published_year", ""),
+                    "publish_year": meta.get("publish_year", ""),
                     "score": round(1 - results['distances'][0][i], 4)
                 })
 
@@ -175,7 +175,7 @@ class SearchEngine:
             "title": metadata.get("title", "Unknown"),
             "authors": metadata.get("authors", "Unknown"),
             "category": metadata.get("category", ""),
-            "published_year": metadata.get("published_year", ""),
+            "publish_year": metadata.get("publish_year", ""),
             "content": book_data['document']
         }
 
@@ -209,8 +209,8 @@ class SearchEngine:
         for meta in all_metadata:
             if meta.get("category"):
                 categories.add(meta["category"])
-            if meta.get("published_year"):
-                years.add(meta["published_year"])
+            if meta.get("publish_year"):
+                years.add(meta["publish_year"])
             if meta.get("authors"):
                 # Split multiple authors
                 author_list = meta["authors"].split(",")
@@ -250,8 +250,8 @@ class SearchEngine:
         # Category và year dùng ChromaDB (exact match)
         if filters.get("category"):
             chromadb_filters["category"] = filters["category"]
-        if filters.get("published_year"):
-            chromadb_filters["published_year"] = filters["published_year"]
+        if filters.get("publish_year"):
+            chromadb_filters["publish_year"] = filters["publish_year"]
 
         # Title và authors dùng Python (partial match)
         if filters.get("title"):
@@ -303,7 +303,7 @@ class SearchEngine:
         - title: exact match (ChromaDB không hỗ trợ $contains nên dùng $eq)
         - authors: exact match
         - category: exact match
-        - published_year: exact match
+        - publish_year: exact match
 
         Args:
             filters: User-provided filters
@@ -323,9 +323,9 @@ class SearchEngine:
             })
 
         # Year filter (exact match)
-        if filters.get("published_year"):
+        if filters.get("publish_year"):
             where_conditions.append({
-                "published_year": {"$eq": filters["published_year"]}
+                "publish_year": {"$eq": filters["publish_year"]}
             })
 
         # Title filter (exact match - ChromaDB limitation)
@@ -377,7 +377,7 @@ class SearchEngine:
                 "title": meta.get("title", "Unknown"),
                 "authors": meta.get("authors", "Unknown"),
                 "category": meta.get("category", ""),
-                "published_year": meta.get("published_year", ""),
+                "publish_year": meta.get("publish_year", ""),
                 "score": round(1 - distance, 4),  # Convert distance to similarity
                 "snippet": snippet
             })
