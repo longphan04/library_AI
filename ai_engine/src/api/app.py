@@ -33,10 +33,78 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config.settings import settings
-from src.db_factory import get_search_engine as factory_get_search_engine, get_database as factory_get_database
+
 from src.indexer import Indexer
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
+from src.search_engine import SearchEngine
+from src.database import get_db, DatabaseConnection
+
+
+def _normalize_filters(filters: Optional[Dict]) -> Optional[Dict]:
+    """
+    Normalize incoming filter keys to the names expected by SearchEngine.
+
+    Accepts common variants used by clients and converts them to the
+    canonical keys used by SearchEngine (title, authors, category, published_year).
+
+    Examples:
+      {"year": "2023"} -> {"published_year": "2023"}
+      {"author": "Jane"} -> {"authors": "Jane"}
+      {"authors": ["A","B"]} -> {"authors": "A, B"}
+    """
+    if not filters:
+        return None
+
+    if not isinstance(filters, dict):
+        return None
+
+    f = dict(filters)  # shallow copy
+
+    # map common synonyms
+    if "year" in f and "published_year" not in f:
+        f["published_year"] = f.pop("year")
+    if "years" in f and "published_year" not in f:
+        # accept both list or single value
+        yrs = f.pop("years")
+        if isinstance(yrs, (list, tuple)) and len(yrs) > 0:
+            f["published_year"] = str(yrs[0])
+        else:
+            f["published_year"] = str(yrs)
+    if "author" in f and "authors" not in f:
+        f["authors"] = f.pop("author")
+
+    # normalize authors list -> comma separated string
+    if "authors" in f and isinstance(f["authors"], (list, tuple)):
+        f["authors"] = ", ".join([str(a).strip() for a in f["authors"] if a])
+
+    # normalize title list -> take first or join
+    if "title" in f and isinstance(f["title"], (list, tuple)):
+        f["title"] = " ".join([str(t).strip() for t in f["title"] if t])
+
+    # ensure string values for exact-match fields
+    for key in ("category", "published_year", "title", "authors"):
+        if key in f and f[key] is not None and not isinstance(f[key], str):
+            f[key] = str(f[key])
+
+    return f
+
+
+def factory_get_search_engine() -> Any:
+    """Factory for SearchEngine.
+
+    Kept as a small abstraction so app wiring can change later without touching
+    the singleton accessors.
+    """
+    return SearchEngine()
+
+
+def factory_get_database() -> Any:
+    """Factory for DB connection.
+
+    Returns a MySQL connection from the project's connection pool.
+    """
+    return get_db()
 
 # ---- App & logging ----
 app = Flask(__name__)
@@ -59,19 +127,20 @@ _singletons_lock = threading.Lock()
 
 
 def get_search_engine() -> Any:
-    """Return a SearchEngine instance from the factory. Uses a singleton for the process."""
+    """Return a SearchEngine instance. Uses a singleton for the process."""
     with _singletons_lock:
         if "search_engine" not in _singletons:
-            logger.info("Initializing SearchEngine via factory (lazy)...")
-            _singletons["search_engine"] = factory_get_search_engine()
+            logger.info("Initializing SearchEngine (lazy)...")
+            _singletons["search_engine"] = SearchEngine()
         return _singletons["search_engine"]
 
 
 def get_database() -> Any:
+    """Return database connection. Uses a singleton for the process."""
     with _singletons_lock:
         if "database" not in _singletons:
-            logger.info("Initializing Database via factory (lazy)...")
-            _singletons["database"] = factory_get_database()
+            logger.info("Initializing Database connection (lazy)...")
+            _singletons["database"] = get_db()
         return _singletons["database"]
 
 
@@ -199,9 +268,12 @@ def api_search():
         return error("'top_k' must be integer", 400)
 
     filters = payload.get("filters")
+    # Normalize filter keys to what SearchEngine expects
+    filters = _normalize_filters(filters)
     try:
         se = get_search_engine()
         results = se.search(query=query_text, filters=filters, top_k=top_k)
+        # Return the normalized filters in the response so clients see what was applied
         return success({"query": query_text, "top_k": top_k, "filters": filters, "results": results})
     except Exception as e:
         logger.exception("Search failed for query=%s", query_text)
@@ -209,7 +281,7 @@ def api_search():
 
 
 @app.route("/ai/recommend/<book_id>", methods=["GET"])
-def api_recommend(book_id: str):
+def api_recommend(book_id: int):
     try:
         se = get_search_engine()
         recs = se.recommend(book_id=book_id, top_k=int(request.args.get("top_k", 5)))
@@ -308,6 +380,8 @@ def api_chat():
     except Exception:
         top_k = 5
     filters = payload.get("filters")
+    # Normalize filter keys before forwarding to search
+    filters = _normalize_filters(filters)
 
     # 1) Retrieve top passages/books using semantic search
     try:

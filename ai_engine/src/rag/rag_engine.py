@@ -2,26 +2,24 @@ import os
 import re
 import json
 import logging
-import google.genai as genai
+from google import genai
+from google.genai import types
 from typing import List, Dict
 
-from ..search_engine import SearchEngine
-from .prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
+from src.search_engine import SearchEngine
+from src.rag.prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, LIBRARY_INFO
+from config.rag_config import (
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    DEFAULT_TOP_K,
+    SCORE_THRESHOLD,
+    MIN_QUERY_LENGTH,
+    TEMPERATURE,
+    MAX_OUTPUT_TOKENS,
+    QUERY_CACHE_THRESHOLD,
+    SEARCH_EXPAND_FACTOR
+)
 
-# =========================================================
-# 🔧 GLOBAL CONFIG
-# =========================================================
-# Số document tối đa dùng để trả lời
-DEFAULT_TOP_K = 5
-
-# Khi search sẽ lấy top_k * factor để tăng recall, sau đó lọc lại
-SEARCH_EXPAND_FACTOR = 3
-
-# Nếu score cao nhất < ngưỡng này → coi như không có kết quả phù hợp
-SCORE_THRESHOLD = 0.80
-
-# Ngưỡng rất cao để dùng query cache (tránh trả lời sai ngữ cảnh)
-QUERY_CACHE_THRESHOLD = 0.95
 
 # Logger cho module RAG
 logger = logging.getLogger("RAGEngine")
@@ -43,42 +41,19 @@ class RAGEngine:
 
     def __init__(self, top_k: int = DEFAULT_TOP_K):
         # ===============================
-        # 1️⃣ SEARCH ENGINE (Vector DB + Embedder)
+        # ️⃣ SEARCH ENGINE (Vector DB + Embedder)
         # ===============================
         self.search_engine = SearchEngine()
         self.embedder = self.search_engine.embedder
         self.vector_db = self.search_engine.vector_db
         self.top_k = top_k
 
-        # ===============================
-        # 2️⃣ GEMINI CLIENT (Stable SDK)
-        # ===============================
-        self.client = genai.Client(
-            api_key=os.getenv("GOOGLE_API_KEY")
-        )
-
-        # ===============================
-        # 3️⃣ FOLLOW-UP MEMORY (RAM ONLY)
-        # ===============================
-        # Lưu danh sách sách của câu hỏi trước để trả lời kiểu:
-        # "cuốn thứ 2", "cuốn này", ...
-        self.last_docs: List[Dict] = []
+        # Initialize Gemini client
+        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        self.last_docs = []  # For follow-up queries
 
     # ==================================================
-    # 🔧 GEMINI HELPER
-    # ==================================================
-    def _genai_generate(self, prompt: str) -> str:
-        """
-        Wrapper gọi Gemini API để sinh text
-        """
-        resp = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        return resp.text.strip() if resp and resp.text else ""
-
-    # ==================================================
-    # 🚫 GARBAGE QUERY FILTER
+    # FILTER GARBAGE QUERIES
     # ==================================================
     def is_garbage_query(self, query: str) -> bool:
         """
@@ -93,7 +68,9 @@ class RAGEngine:
 
         q = query.strip().lower()
 
-        if len(q) < 3 or q.isdigit():
+        if len(q) < MIN_QUERY_LENGTH:
+            return True
+        if q.isdigit():
             return True
 
         # Không có chữ cái (kể cả tiếng Việt)
@@ -151,7 +128,7 @@ class RAGEngine:
     def is_followup_query(self, question: str) -> bool:
         """
         Ví dụ:
-        - "Cuốn thứ 2 thì sao?"
+        - "Cuốn thứ thì sao?"
         - "Cuốn này ai viết?"
         """
         if not self.last_docs:
@@ -175,7 +152,6 @@ class RAGEngine:
 
         if not match:
             return "❌ Tôi chưa xác định được cuốn sách bạn đang hỏi."
-
         idx = int(match.group(1)) - 1
 
         if 0 <= idx < len(self.last_docs):
@@ -266,34 +242,33 @@ Yêu cầu:
 - Nói rõ không có dữ liệu
 - KHÔNG bịa tên sách
 """
-        return self._genai_generate(prompt)
+        try:
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=TEMPERATURE,
+                    max_output_tokens=MAX_OUTPUT_TOKENS
+                )
+            )
+            return response.text.strip() if response and response.text else "❌ Xin lỗi, tôi không thể trả lời câu hỏi này."
+        except Exception as e:
+            logger.error(f"Gemini fallback error: {e}")
+            return "❌ Xin lỗi, thư viện không có thông tin phù hợp với câu hỏi của bạn."
 
     # ==================================================
-    # 💡 CÂU HỎI GỢI Ý BAN ĐẦU
-    # ==================================================
-    def get_suggested_questions(self) -> List[str]:
-        return [
-            "Tìm sách IT?",
-            "Sách mới nhất?",
-            "Sách về kinh tế – tài chính?",
-            "Mấy giờ thư viện mở cửa?",
-            "Có bao nhiêu cuốn sách trong thư viện?",
-            "Gợi ý sách về trí tuệ nhân tạo",
-        ]
-
-    # ==================================================
-    # 🤖 HÀM CHÍNH: PIPELINE XỬ LÝ QUESTION
+    # GENERATE ANSWER
     # ==================================================
     def generate_answer(self, question: str) -> str:
 
         # ==================================================
-        # 0️⃣ CHẶN CÂU HỎI RÁC
+        # ️⃣ CHẶN CÂU HỎI RÁC
         # ==================================================
         if self.is_garbage_query(question):
             return "❌ Câu hỏi không hợp lệ hoặc quá ngắn."
 
         # ==================================================
-        # 1️⃣ QUERY MEMORY (CACHE CÂU HỎI CŨ)
+        # ️⃣ QUERY MEMORY (CACHE CÂU HỎI CŨ)
         # ==================================================
         q_vec = self.embedder.embed_text(question, is_query=True)
 
@@ -306,7 +281,7 @@ Yêu cầu:
                 return f"⚡ {cached}"
 
         # ==================================================
-        # 2️⃣ THỐNG KÊ
+        # ️⃣ THỐNG KÊ
         # ==================================================
         if self.is_library_stats_query(question):
             total = self.vector_db.get_collection_stats().get("count", 0)
@@ -318,7 +293,7 @@ Yêu cầu:
             return answer
 
         # ==================================================
-        # 3️⃣ NỘI QUY / GIỜ GIẤC
+        # ️⃣ NỘI QUY / GIỜ GIẤC
         # ==================================================
         if self.is_library_info_query(question):
             ctx = self._build_library_context()
@@ -331,7 +306,19 @@ Yêu cầu:
     **ctx
 )}
 """
-            answer = self._genai_generate(prompt)
+            try:
+                response = self.client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=TEMPERATURE,
+                        max_output_tokens=MAX_OUTPUT_TOKENS
+                    )
+                )
+                answer = response.text.strip() if response and response.text else "❌ Không th��� trả lời câu hỏi này."
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
+                answer = "❌ Không thể trả lời câu hỏi này."
 
             self.vector_db.add_query_memory(
                 question, q_vec, answer, qtype="library_info"
@@ -339,13 +326,13 @@ Yêu cầu:
             return answer
 
         # ==================================================
-        # 4️⃣ FOLLOW-UP (KHÔNG CACHE)
+        # ️⃣ FOLLOW-UP (KHÔNG CACHE)
         # ==================================================
         if self.is_followup_query(question):
             return self.answer_followup(question)
 
         # ==================================================
-        # 5️⃣ BOOK RAG PIPELINE
+        # ️⃣ BOOK RAG PIPELINE
         # ==================================================
         raw_docs = self.search_engine.search(
             query=question,
@@ -368,7 +355,7 @@ Yêu cầu:
             books_text = "\n".join(book_lines)
 
             # ==================================================
-            # 5.1️⃣ CHỈ LIST, KHÔNG TỔNG HỢP
+            # .️⃣ CHỈ LIST, KHÔNG TỔNG HỢP
             # ==================================================
             if not self.needs_synthesis(question):
                 answer = f"📚 Danh sách sách liên quan\n\n{books_text}"
@@ -379,7 +366,7 @@ Yêu cầu:
                 return answer
 
             # ==================================================
-            # 5.2️⃣ CÓ GỌI LLM ĐỂ TỔNG HỢP
+            # .️⃣ CÓ GỌI LLM ĐỂ TỔNG HỢP
             # ==================================================
             ctx = self._build_library_context()
 
@@ -391,7 +378,19 @@ Yêu cầu:
     **ctx
 )}
 """
-            synthesis = self._genai_generate(prompt)
+            try:
+                response = self.client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=TEMPERATURE,
+                        max_output_tokens=MAX_OUTPUT_TOKENS
+                    )
+                )
+                synthesis = response.text.strip() if response and response.text else "❌ Không thể tổng hợp thông tin."
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
+                synthesis = "❌ Không thể tổng hợp thông tin."
 
             answer = f"""📚 Danh sách sách liên quan
 
@@ -406,7 +405,7 @@ Yêu cầu:
             return answer
 
         # ==================================================
-        # 6️⃣ FALLBACK: KHÔNG CÓ DATA
+        # ️⃣ FALLBACK: KHÔNG CÓ DATA
         # ==================================================
         answer = self.gemini_fallback(question)
 
