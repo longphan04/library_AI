@@ -5,7 +5,7 @@
 **/.env.*
 
 # 2. MÔI TRƯỜNG & THƯ VIỆN
-venv/
+venv/*
 .venv/
 __pycache__/
 *.pyc

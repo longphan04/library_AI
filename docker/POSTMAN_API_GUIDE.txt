@@ -1,0 +1,564 @@
+================================================================================
+        HƯỚNG DẪN TEST API TRÊN POSTMAN - LIBRARY AI
+================================================================================
+
+📌 TRƯỚC KHI BẮT ĐẦU:
+
+1. API Server đang chạy:
+   Command: python main.py api
+   URL: http://localhost:9999
+
+2. Đã chạy index:
+   Command: python main.py index
+   (Cần chạy để có data search)
+
+3. Test users đã tồn tại (từ test_data.sql):
+   - admin@test.com (password: password123)
+   - user@test.com (password: password123)
+   - member@test.com (password: password123)
+
+================================================================================
+                        SETUP POSTMAN
+================================================================================
+
+BƯỚC 1: Tạo Environment
+------------------------
+1. Click "Environments" → "+"
+2. Name: Library AI Local
+3. Variables:
+   - base_url = http://localhost:9999
+   - session_id = (leave empty)
+4. Save
+5. Select environment (top right)
+
+BƯỚC 2: Tạo Collection
+-----------------------
+1. Click "Collections" → "+"
+2. Name: Library AI API
+3. Ready to add requests!
+
+================================================================================
+                    DANH SÁCH API ENDPOINTS
+================================================================================
+
+1. GET  /ai/health                      - Health check
+2. POST /ai/search                      - Search books
+3. GET  /ai/filters                     - Get filters
+4. GET  /ai/recommend/:book_id          - Recommend books
+5. POST /ai/chat                        - Chat (start/continue)
+6. POST /ai/chat/suggest                - Chat suggestions
+7. GET  /ai/chat/history/:session_id    - Get history
+8. DELETE /ai/chat/history/:session_id  - Clear history
+9. POST /ai/data/sync                   - Trigger sync
+10. GET /ai/jobs                        - List jobs
+11. GET /ai/jobs/:job_id                - Job status
+
+================================================================================
+                    CHI TIẾT TỪNG REQUEST
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. HEALTH CHECK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: GET
+URL: {{base_url}}/ai/health
+
+Headers: (none needed)
+
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "message": "ok",
+  "data": {
+    "service": "ai_engine",
+    "time": "2026-01-16T...",
+    "paths": {...}
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. SEARCH BOOKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: POST
+URL: {{base_url}}/ai/search
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "query": "python programming",
+  "top_k": 5,
+  "filters": {
+    "category": "Programming"
+  }
+}
+
+📋 EXAMPLE QUERIES TO TEST:
+---------------------------
+Query 1 - Simple search:
+{
+  "query": "machine learning",
+  "top_k": 10
+}
+
+Query 2 - With year filter:
+{
+  "query": "web development",
+  "top_k": 5,
+  "filters": {
+    "published_year": 2020
+  }
+}
+
+Query 3 - Vietnamese books:
+{
+  "query": "sách tiếng việt",
+  "top_k": 5
+}
+
+Query 4 - AI books:
+{
+  "query": "artificial intelligence deep learning",
+  "top_k": 8
+}
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "query": "python programming",
+    "top_k": 5,
+    "results": [
+      {
+        "id": "book_001",
+        "title": "Python for Beginners",
+        "authors": "John Doe",
+        "category": "Programming",
+        "published_year": 2020,
+        "score": 0.95,
+        "snippet": "Introduction to Python..."
+      }
+    ]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. GET FILTERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: GET
+URL: {{base_url}}/ai/filters
+
+Headers: (none)
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "categories": ["Programming", "AI", "Web Development"],
+    "years": [2023, 2022, 2021],
+    "authors": ["John Doe", "Jane Smith"]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. RECOMMEND BOOKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: GET
+URL: {{base_url}}/ai/recommend/BOOK_ID?top_k=5
+
+NOTE: Replace BOOK_ID with actual book ID from search results
+
+Example URLs:
+{{base_url}}/ai/recommend/book_001?top_k=3
+{{base_url}}/ai/recommend/book_123?top_k=5
+
+Headers: (none)
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "book_id": "book_001",
+    "recommendations": [
+      {
+        "id": "book_002",
+        "title": "Advanced Python",
+        "score": 0.92
+      }
+    ]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. CHAT - START SESSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: POST
+URL: {{base_url}}/ai/chat
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "message": "Tìm sách về Python cho người mới bắt đầu",
+  "top_k": 5
+}
+
+📋 EXAMPLE CHAT MESSAGES:
+-------------------------
+Message 1 - Ask for recommendations:
+{
+  "message": "Gợi ý sách học lập trình cho người mới",
+  "top_k": 5
+}
+
+Message 2 - Ask about AI:
+{
+  "message": "Tìm sách về AI và machine learning",
+  "top_k": 8
+}
+
+Message 3 - Vietnamese query:
+{
+  "message": "Có sách tiếng Việt về web development không?",
+  "top_k": 5
+}
+
+Message 4 - Specific topic:
+{
+  "message": "Sách về database design và SQL",
+  "top_k": 5
+}
+
+⚠️ IMPORTANT - AUTO SAVE SESSION ID:
+Add this to "Tests" tab in Postman:
+
+if (pm.response.code === 200) {
+    const jsonData = pm.response.json();
+    if (jsonData.data && jsonData.data.session_id) {
+        pm.environment.set("session_id", jsonData.data.session_id);
+    }
+}
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "session_id": "s_abc123def456",
+    "answer": "Mình tìm thấy một số cuốn liên quan:\n1. ...",
+    "sources": [...],
+    "history": [...]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. CHAT - CONTINUE SESSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: POST
+URL: {{base_url}}/ai/chat
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "message": "Trong số đó, cuốn nào dễ nhất?",
+  "session_id": "{{session_id}}",
+  "top_k": 3
+}
+
+NOTE: Uses {{session_id}} saved from previous chat
+
+📋 FOLLOW-UP MESSAGES:
+----------------------
+{
+  "message": "Cho tôi xem thêm sách về chủ đề này",
+  "session_id": "{{session_id}}",
+  "top_k": 5
+}
+
+{
+  "message": "Có sách nào mới hơn không?",
+  "session_id": "{{session_id}}",
+  "top_k": 5
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. CHAT SUGGESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: POST
+URL: {{base_url}}/ai/chat/suggest
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "context": "",
+  "max": 5
+}
+
+Alternative body:
+{
+  "context": "lập trình",
+  "max": 8
+}
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "suggestions": [
+      "Tìm sách về Programming",
+      "Tìm sách IT?",
+      "Sách mới nhất?"
+    ]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. GET CHAT HISTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: GET
+URL: {{base_url}}/ai/chat/history/{{session_id}}
+
+Headers: (none)
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "session_id": "s_abc123def456",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Tìm sách về Python...",
+        "time": "2026-01-16T..."
+      },
+      {
+        "role": "assistant",
+        "text": "Mình tìm thấy...",
+        "time": "2026-01-16T..."
+      }
+    ]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. CLEAR CHAT HISTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: DELETE
+URL: {{base_url}}/ai/chat/history/{{session_id}}
+
+Headers: (none)
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "session_id": "s_abc123def456",
+    "messages": []
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. TRIGGER DATA SYNC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: POST
+URL: {{base_url}}/ai/data/sync
+
+Headers:
+Content-Type: application/json
+
+Body (JSON) - Index only:
+{
+  "action": "index"
+}
+
+📋 SYNC ACTIONS:
+----------------
+Action 1 - Re-index ChromaDB:
+{
+  "action": "index"
+}
+
+Action 2 - Re-process data:
+{
+  "action": "process"
+}
+
+Action 3 - Crawl new books:
+{
+  "action": "crawl"
+}
+
+Action 4 - Process + Index:
+{
+  "action": "all"
+}
+
+Expected Response:
+{
+  "status": "success",
+  "message": "ok",
+  "data": {
+    "job_id": "abc-123-def",
+    "action": "index"
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. LIST ALL JOBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: GET
+URL: {{base_url}}/ai/jobs
+
+Headers: (none)
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "jobs": [
+      {
+        "id": "abc-123",
+        "type": "data_sync:index",
+        "status": "completed",
+        "created_at": "...",
+        "finished_at": "..."
+      }
+    ]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. GET JOB STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Method: GET
+URL: {{base_url}}/ai/jobs/YOUR_JOB_ID
+
+NOTE: Replace YOUR_JOB_ID with job ID from sync response
+
+Example: {{base_url}}/ai/jobs/abc-123-def-456
+
+Headers: (none)
+Body: (none)
+
+Expected Response:
+{
+  "status": "success",
+  "data": {
+    "id": "abc-123-def",
+    "type": "data_sync:index",
+    "status": "completed",
+    "created_at": "2026-01-16T13:30:00Z",
+    "finished_at": "2026-01-16T13:30:15Z",
+    "error": null
+  }
+}
+
+================================================================================
+                    WORKFLOW TEST SCENARIOS
+================================================================================
+
+🎯 SCENARIO 1: Basic Search & Discovery
+----------------------------------------
+1. Health Check          → Verify API running
+2. Get Filters           → See available categories
+3. Search "python"       → Find Python books
+4. Recommend (book_id)   → Get similar books
+
+🎯 SCENARIO 2: Chat Conversation
+---------------------------------
+1. Chat Suggestions      → Get starter prompts
+2. Chat "Tìm sách AI"    → Start conversation (saves session_id)
+3. Chat "Cuốn nào hay?"  → Continue conversation
+4. Get History           → View all messages
+5. Clear History         → Reset session
+
+🎯 SCENARIO 3: Data Management
+-------------------------------
+1. Trigger Sync (index)  → Re-index data
+2. List Jobs             → See all background tasks
+3. Get Job Status        → Check specific job
+4. Search again          → Test new index
+
+================================================================================
+                        TROUBLESHOOTING
+================================================================================
+
+❌ ERROR: Connection Refused
+----------------------------
+Fix: Start API server
+Command: python main.py api
+
+❌ ERROR: Empty Results []
+--------------------------
+Fix: Run indexer first
+Command: python main.py index
+
+❌ ERROR: Session Not Found
+---------------------------
+Fix: Start new chat session first
+Body: {"message": "Hello", "top_k": 5}
+
+❌ ERROR: 500 Internal Server Error
+-----------------------------------
+Fix: Check API terminal for error logs
+
+================================================================================
+                        QUICK REFERENCE
+================================================================================
+
+Base URL:     http://localhost:9999
+API Prefix:   /ai
+Test User:    user@test.com
+Password:     password123
+
+Environment Variables:
+  base_url    = http://localhost:9999
+  session_id  = (auto-saved from chat)
+
+Common Headers:
+  Content-Type: application/json
+
+================================================================================
+                        SUCCESS CRITERIA
+================================================================================
+
+✅ Health Check     → status: 200, service: "ai_engine"
+✅ Search           → results array with books
+✅ Filters          → categories, years, authors arrays
+✅ Recommend        → recommendations array
+✅ Chat             → session_id + answer + sources
+✅ Suggestions      → suggestions array (5 items)
+✅ History          → messages array
+✅ Sync             → job_id returned
+✅ Jobs             → jobs array
+
+================================================================================
+                            THE END
+================================================================================
+
+📝 TIP: Copy-paste bodies vào Postman để test nhanh!
+🚀 Happy Testing!
