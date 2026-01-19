@@ -7,13 +7,11 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.search_engine import SearchEngine
-from src.embedder import Embedder
-from src.vector_db import VectorDB
-from config.settings import settings
 
 
 class TestSearchComputersJerry:
     """Test suite for searching 'computers' with author filter 'Jerry'"""
+
     @pytest.fixture(scope="class")
     def search_engine(self):
         """Create SearchEngine instance for tests"""
@@ -25,17 +23,18 @@ class TestSearchComputersJerry:
         print("Testing Search: query='computers', filter={'authors': 'Jerry'}")
         print("="*60)
 
-    # Execute search
+        # Execute search
         results = search_engine.search(
             query="computers",
             filters={"authors": "Jerry"},
             top_k=10
-)
+        )
 
         # Assertions
         assert isinstance(results, list), "Results should be a list"
         print(f"\n✓ Found {len(results)} results")
-# Display results
+
+        # Display results
         if results:
             print("\n📚 Search Results:")
             print("-" * 60)
@@ -180,40 +179,3 @@ if __name__ == "__main__":
     # Run tests manually
     main()
 
-    print("========================================")
-    print("Running Search Engine Tests")
-    print("========================================\n")
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(settings.LOG_DIR, f"test_search_engine_{timestamp}.txt")
-
-    with open(log_file, 'w', encoding='utf-8') as f:
-        f.write("=" * 60 + "\n")
-        f.write("SEARCH ENGINE TEST RESULTS\n")
-        f.write(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("=" * 60 + "\n\n")
-
-    with open(log_file, 'a', encoding='utf-8') as f:
-        import subprocess
-        import sys
-
-        proc = subprocess.run(
-            [sys.executable, '-m', 'pytest', __file__, '-v', '-s', '--tb=short'],
-            capture_output=True,
-            text=True
-        )
-
-        f.write(proc.stdout)
-        if proc.stderr:
-            f.write("\nSTDERR:\n")
-            f.write(proc.stderr)
-
-        f.write("\n" + "=" * 60 + "\n")
-        if proc.returncode == 0:
-            f.write("STATUS: ALL TESTS PASSED\n")
-        else:
-            f.write(f"STATUS: TESTS FAILED (exit code: {proc.returncode})\n")
-        f.write("=" * 60 + "\n")
-
-    result = pytest.main([__file__, "-v", "-s", "--tb=short"])
-    print(f"\nTest results saved to: {log_file}")

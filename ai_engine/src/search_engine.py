@@ -34,10 +34,10 @@ class SearchEngine:
             query: Câu hỏi tìm kiếm ("Sách Python cho người mới")
             filters: Dict filters, ví dụ:
                 {
-                    "title": "Python",          # Tìm trong tiêu đề
-                    "authors": "Mark Lutz",     # Tìm tác giả
-                    "category": "Programming",  # Thể loại
-                    "published_year": "2023"    # Năm xuất bản
+                    "title": "Python",          # Tìm trong tiêu đề (partial match)
+                    "authors": "Mark Lutz",     # Tìm tác giả (partial match)
+                    "category": "Programming",  # Thể loại (exact match)
+                    "published_year": "2023"    # Năm xuất bản (exact match)
                 }
             top_k: Số kết quả trả về
 
@@ -56,18 +56,52 @@ class SearchEngine:
             logger.error("Failed to embed query")
             return []
 
-        # 2. Build ChromaDB where clause
-        where_filter = self._build_where_clause(filters) if filters else None
+        # 2. Tách filters thành ChromaDB filters và Python filters
+        chromadb_filters, python_filters = self._split_filters(filters) if filters else ({}, {})
 
-        # 3. Query vector DB
+        # 3. Build ChromaDB where clause (chỉ dùng exact match filters)
+        where_filter = self._build_where_clause(chromadb_filters) if chromadb_filters else None
+
+        # 4. Query vector DB với top_k cao hơn nếu có python filters
+        # Use a larger candidate pool when we have python-level filters
+        # so there is a higher chance matching metadata appears in the candidate set.
+        # Keep a reasonable cap to avoid huge queries.
+        if python_filters:
+            query_limit = min(max(top_k * 10, top_k * 3), 1000)
+        else:
+            query_limit = top_k
         results = self.vector_db.query_vectors(
             query_vector=query_vector,
-            n_results=top_k,
+            n_results=query_limit,
             where_filter=where_filter
         )
 
-        # 4. Format results
-        return self._format_search_results(results)
+        # 5. Format results
+        formatted = self._format_search_results(results)
+
+        # 6. Apply Python filters (partial match cho title/authors)
+        if python_filters:
+            formatted = self._apply_python_filters(formatted, python_filters)
+
+            # 6b) If python filters yielded nothing, try a broader candidate set as a fallback
+            # This helps when the author/title exists in the DB but was not within the
+            # initial semantic-nearest neighbors window.
+            if not formatted:
+                logger.info("Python filters returned no results; trying broader candidate window for fallback")
+                broad_limit = min(max(top_k * 100, 500), 2000)
+                try:
+                    broad_results = self.vector_db.query_vectors(
+                        query_vector=query_vector,
+                        n_results=broad_limit,
+                        where_filter=where_filter,
+                    )
+                    broad_formatted = self._format_search_results(broad_results)
+                    formatted = self._apply_python_filters(broad_formatted, python_filters)
+                except Exception:
+                    logger.exception("Fallback broad query failed")
+
+        # 7. Giới hạn kết quả về top_k
+        return formatted[:top_k]
 
     def recommend(self, book_id: str, top_k: int = 5) -> List[Dict]:
         """
@@ -200,13 +234,74 @@ class SearchEngine:
         self._filters_cache = None
         logger.info("Filters cache invalidated")
 
+    def _split_filters(self, filters: Dict) -> tuple:
+        """
+        Tách filters thành ChromaDB filters (exact match) và Python filters (partial match).
+
+        Args:
+            filters: User-provided filters
+
+        Returns:
+            (chromadb_filters, python_filters) tuple
+        """
+        chromadb_filters = {}
+        python_filters = {}
+
+        # Category và year dùng ChromaDB (exact match)
+        if filters.get("category"):
+            chromadb_filters["category"] = filters["category"]
+        if filters.get("published_year"):
+            chromadb_filters["published_year"] = filters["published_year"]
+
+        # Title và authors dùng Python (partial match)
+        if filters.get("title"):
+            python_filters["title"] = filters["title"].lower()
+        if filters.get("authors"):
+            python_filters["authors"] = filters["authors"].lower()
+
+        return chromadb_filters, python_filters
+
+    def _apply_python_filters(self, results: List[Dict], python_filters: Dict) -> List[Dict]:
+        """
+        Apply partial match filters trong Python.
+
+        Args:
+            results: Formatted search results
+            python_filters: Dict with title/authors filters
+
+        Returns:
+            Filtered results
+        """
+        filtered = []
+
+        for book in results:
+            match = True
+
+            # Check title filter (partial match, case-insensitive)
+            if "title" in python_filters:
+                book_title = book.get("title", "").lower()
+                if python_filters["title"] not in book_title:
+                    match = False
+
+            # Check authors filter (partial match, case-insensitive)
+            if "authors" in python_filters and match:
+                book_authors = book.get("authors", "").lower()
+                if python_filters["authors"] not in book_authors:
+                    match = False
+
+            if match:
+                filtered.append(book)
+
+        logger.info(f"Python filters reduced {len(results)} to {len(filtered)} results")
+        return filtered
+
     def _build_where_clause(self, filters: Dict) -> Dict:
         """
         Chuyển filters dict thành ChromaDB where clause.
 
         Hỗ trợ filters:
-        - title: partial match
-        - authors: partial match
+        - title: exact match (ChromaDB không hỗ trợ $contains nên dùng $eq)
+        - authors: exact match
         - category: exact match
         - published_year: exact match
 
@@ -214,7 +309,10 @@ class SearchEngine:
             filters: User-provided filters
 
         Returns:
-            ChromaDB where clause
+            ChromaDB where clause hoặc None nếu không có filters
+
+        Note: ChromaDB chỉ hỗ trợ: $eq, $ne, $gt, $gte, $lt, $lte, $in, $nin
+        Không hỗ trợ $contains nên ta phải dùng $eq cho exact match
         """
         where_conditions = []
 
@@ -230,16 +328,17 @@ class SearchEngine:
                 "published_year": {"$eq": filters["published_year"]}
             })
 
-        # Title filter (contains)
+        # Title filter (exact match - ChromaDB limitation)
+        # Note: Để tìm partial match, cần query sau đó filter trong Python
         if filters.get("title"):
             where_conditions.append({
-                "title": {"$contains": filters["title"]}
+                "title": {"$eq": filters["title"]}
             })
 
-        # Authors filter (contains)
+        # Authors filter (exact match - ChromaDB limitation)
         if filters.get("authors"):
             where_conditions.append({
-                "authors": {"$contains": filters["authors"]}
+                "authors": {"$eq": filters["authors"]}
             })
 
         # Combine conditions
