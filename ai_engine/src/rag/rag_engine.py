@@ -159,7 +159,7 @@ class RAGEngine:
             return (
                 f"📘 **{b['title']}**\n"
                 f"- Tác giả: {b['authors']}\n"
-                f"- Năm xuất bản: {b['published_year']}\n\n"
+                f"- Năm xuất bản: {b['publish_year']}\n\n"
                 f"{b.get('snippet','')}"
             )
 
@@ -348,7 +348,7 @@ Yêu cầu:
 
             # Build danh sách sách
             book_lines = [
-                f"{i}. {d['title']} – {d['authors']} ({d['published_year']})"
+                f"{i}. {d['title']} – {d['authors']} ({d['publish_year']})"
                 for i, d in enumerate(self.last_docs, 1)
             ]
 
