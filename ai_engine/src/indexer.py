@@ -33,6 +33,7 @@ class Indexer:
 
         # Default values
         id_val = "unknown"
+        isbn = ""
         title = "Unknown"
         authors = "Unknown"
         category = "General"
@@ -50,6 +51,7 @@ class Indexer:
                 parts = raw_id.split(' (')
                 if parts:
                     id_val = parts[0].strip()
+                    isbn = id_val  # ISBN chính là identifier
             elif line.startswith("Tác giả: "):
                 authors = line.replace("Tác giả: ", "").strip()
             elif line.startswith("Thể loại: "):
@@ -58,6 +60,7 @@ class Indexer:
                 year = line.replace("Năm xuất bản: ", "").strip()
 
         meta = {
+            "isbn": isbn,  # Thêm ISBN vào metadata
             "title": title,
             "authors": authors,
             "category": category,

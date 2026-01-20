@@ -280,31 +280,33 @@ def api_search():
         return error(str(e), 500)
 
 
-@app.route("/ai/recommend/<book_id>", methods=["GET"])
-def api_recommend(book_id):
+@app.route("/ai/recommend/<identifier>", methods=["GET"])
+def api_recommend(identifier):
     """
-    Recommend similar books based on book_id.
-    book_id có thể là int hoặc string.
+    Recommend similar books based on identifier.
+    identifier có thể là ISBN hoặc internal book ID.
     """
     try:
-        # Convert book_id to string (Vector DB uses string IDs)
-        book_id_str = str(book_id)
+        # Convert identifier to string (Vector DB uses string IDs)
+        identifier_str = str(identifier)
         
         se = get_search_engine()
         top_k = int(request.args.get("top_k", 5))
         
-        recs = se.recommend(book_id=book_id_str, top_k=top_k)
+        # Recommend vẫn dùng internal book_id của Vector DB
+        # Nếu cần lookup từ ISBN → book_id, implement sau
+        recs = se.recommend(book_id=identifier_str, top_k=top_k)
         
         if not recs:
             return success({
-                "book_id": book_id_str,
+                "identifier": identifier_str,
                 "recommendations": [],
-                "message": f"Book ID '{book_id_str}' not found or no similar books available"
+                "message": f"Book with identifier '{identifier_str}' not found or no similar books available"
             })
         
-        return success({"book_id": book_id_str, "recommendations": recs})
+        return success({"identifier": identifier_str, "recommendations": recs})
     except Exception as e:
-        logger.exception("Recommend failed for %s", book_id)
+        logger.exception("Recommend failed for %s", identifier)
         return error(str(e), 500)
 
 
@@ -438,13 +440,13 @@ def api_chat():
     sources = []
     for r in results:
         sources.append({
-            "id": r.get("id"),
+            "identifier": r.get("identifier"),
             "title": r.get("title"),
             "authors": r.get("authors"),
             "category": r.get("category"),
             "publish_year": r.get("publish_year"),
             "score": r.get("score"),
-            "snippet": r.get("snippet")
+            "richtext": r.get("richtext")
         })
 
     return success({

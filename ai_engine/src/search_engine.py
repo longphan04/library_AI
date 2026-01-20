@@ -142,7 +142,7 @@ class SearchEngine:
 
                 meta = results['metadatas'][0][i]
                 recommendations.append({
-                    "id": rec_id,
+                    "identifier": meta.get("isbn", ""),
                     "title": meta.get("title", "Unknown"),
                     "authors": meta.get("authors", "Unknown"),
                     "category": meta.get("category", ""),
@@ -171,12 +171,12 @@ class SearchEngine:
 
         metadata = book_data['metadata']
         return {
-            "id": book_id,
+            "identifier": metadata.get("isbn", ""),
             "title": metadata.get("title", "Unknown"),
             "authors": metadata.get("authors", "Unknown"),
             "category": metadata.get("category", ""),
             "publish_year": metadata.get("publish_year", ""),
-            "content": book_data['document']
+            "richtext": book_data['document']
         }
 
     def get_filters(self) -> Dict:
@@ -366,20 +366,17 @@ class SearchEngine:
 
         for i, book_id in enumerate(results['ids'][0]):
             meta = results['metadatas'][0][i]
-            document = results['documents'][0][i]
+            document = results['documents'][0][i]  # Rich text đầy đủ
             distance = results['distances'][0][i]
 
-            # Create snippet (first 200 chars)
-            snippet = document[:200] + "..." if len(document) > 200 else document
-
             books.append({
-                "id": book_id,
+                "identifier": meta.get("isbn", ""),  # Unified field name
                 "title": meta.get("title", "Unknown"),
                 "authors": meta.get("authors", "Unknown"),
                 "category": meta.get("category", ""),
                 "publish_year": meta.get("publish_year", ""),
                 "score": round(1 - distance, 4),  # Convert distance to similarity
-                "snippet": snippet
+                "richtext": document  # Full rich text document
             })
 
         return books

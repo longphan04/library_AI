@@ -63,16 +63,98 @@ class DataProcessor:
         return False
 
     def extract_best_identifier(self, identifiers):
+        """
+        Parse identifier với priority:
+        1. ISBN_13 (chuẩn quốc tế)
+        2. ISBN_10
+        3. OTHER types (parse PREFIX:NUMBER → lưu NUMBER, type=PREFIX)
+        
+        Examples:
+          "OCLC:951285305" → identifier="951285305", type="OCLC"
+          "HARVARD:32044088773080" → identifier="32044088773080", type="HARVARD"
+          "978-0-13-468599-1" → identifier="978-0-13-468599-1", type="ISBN_13"
+        """
         if not identifiers:
             return "", ""
+        
+        # Priority 1: ISBN_13
         for item in identifiers:
             if item.get('type') == 'ISBN_13':
-                return item.get('identifier'), "ISBN_13"
+                isbn = item.get('identifier', '')
+                return isbn, "ISBN_13"
+        
+        # Priority 2: ISBN_10
         for item in identifiers:
             if item.get('type') == 'ISBN_10':
-                return item.get('identifier'), "ISBN_10"
+                isbn = item.get('identifier', '')
+                return isbn, "ISBN_10"
+        
+        # Priority 3: OTHER types - parse PREFIX:NUMBER format
+        for item in identifiers:
+            raw_id = item.get('identifier', '')
+            
+            # Check if format is "PREFIX:NUMBER"
+            if ':' in raw_id:
+                parts = raw_id.split(':', 1)
+                prefix = parts[0].strip().upper()  # OCLC, HARVARD, etc.
+                number = parts[1].strip()          # 951285305
+                return number, prefix
+        
+        # Fallback: return first identifier as-is
+        # Fallback: return first identifier as-is
         first_item = identifiers[0]
         return first_item.get('identifier', ""), first_item.get('type', "UNKNOWN")
+
+    def clean_text(self, text):
+        """
+        Loại bỏ ký tự đặc biệt không mong muốn.
+        
+        Examples:
+          ""Python"" → "Python"
+          "Data Science" → "Data Science"
+        """
+        if not text:
+            return text
+        
+        # Loại bỏ các loại dấu ngoặc kép khác nhau
+        replacements = {
+            '"': '',  # Left double quotation mark (U+201C)
+            '"': '',  # Right double quotation mark (U+201D)
+            '"': '',  # Standard ASCII quote
+            '„': '',  # Double low-9 quotation mark
+            '\ufffd': '',  # Replacement character
+            '�': ''   # Also replacement character
+        }
+        
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        
+        # Normalize whitespace (multiple spaces → single space)
+        text = ' '.join(text.split())
+        
+        return text.strip()
+
+    def build_full_title(self, title, subtitle):
+        """
+        Kết hợp title và subtitle để tránh trùng lặp.
+        
+        Examples:
+          title="Python", subtitle="A Guide" → "Python - A Guide"
+          title="Python", subtitle="" → "Python"
+          title="Python", subtitle=None → "Python"
+        """
+        if not title:
+            return "Unknown"
+        
+        # Clean title
+        title = self.clean_text(title)
+        
+        # Nếu có subtitle, kết hợp lại
+        if subtitle and subtitle.strip():
+            subtitle = self.clean_text(subtitle)
+            return f"{title} - {subtitle}"
+        
+        return title
 
     def clean_item(self, raw_item, seen_ids):
         self.stats["total_raw_items"] += 1
@@ -81,20 +163,25 @@ class DataProcessor:
         info = raw_item.get("volumeInfo", {})
         
         # 1. Lấy dữ liệu thô
-        title = info.get("title")
-        subtitle = info.get("subtitle", "")
+        title_raw = info.get("title")
+        subtitle_raw = info.get("subtitle", "")
         description = info.get("description", "")
         
-        # 2. Xử lý Tác giả (Đưa lên trước để check lỗi font)
+        # 2. Build full title (kết hợp title + subtitle, clean special chars)
+        full_title = self.build_full_title(title_raw, subtitle_raw)
+        
+        # 3. Xử lý Tác giả
         authors_list = info.get("authors", ["Unknown"])
         # Chuyển list thành string: ["Nam Cao", "To Hoai"] -> "Nam Cao, To Hoai"
         authors_str = ", ".join(authors_list) if isinstance(authors_list, list) else str(authors_list)
+        # Clean special chars trong authors
+        authors_str = self.clean_text(authors_str)
 
-        # 3. Lấy Identifier
+        # 4. Lấy Identifier (với smart parsing)
         ident_val, ident_type = self.extract_best_identifier(info.get("industryIdentifiers", []))
 
         # --- BỘ LỌC CƠ BẢN (Basic Filters) ---
-        if not book_id or not title:
+        if not book_id or not title_raw:
             self.stats["dropped_bad_data"] += 1
             return None
         
@@ -108,9 +195,9 @@ class DataProcessor:
 
         # --- KIỂM TRA LỖI FONT (Encoding Check) ---
         # Kiểm tra cả 3 trường: Tiêu đề, Mô tả, Tác giả
-        if (self.has_font_errors(title) or 
+        if (self.has_font_errors(full_title) or 
             self.has_font_errors(description) or 
-            self.has_font_errors(authors_str)):  # <--- THÊM CHECK TÁC GIẢ TẠI ĐÂY
+            self.has_font_errors(authors_str)):
             
             self.stats["dropped_font_error"] += 1
             return None
@@ -134,12 +221,12 @@ class DataProcessor:
 
         categories = info.get("categories", ["General"])
         category_str = categories[0] if categories else "General"
-
-        full_title_text = f"{title} - {subtitle}" if subtitle else title
         
-        # Tạo nội dung Rich Text
+        publisher = self.clean_text(info.get("publisher", "Unknown"))
+
+        # Tạo nội dung Rich Text với full_title
         rich_text = (
-            f"Tiêu đề: {full_title_text}\n"
+            f"Tiêu đề: {full_title}\n"
             f"Mã định danh: {ident_val} ({ident_type})\n"
             f"Tác giả: {authors_str}\n"
             f"Thể loại: {category_str}\n"
@@ -151,10 +238,10 @@ class DataProcessor:
             "id": book_id,
             "identifier": ident_val,    
             "type": ident_type,         
-            "title": title,
-            "subtitle": subtitle,
+            "title": full_title,  # Sử dụng full_title (đã clean + merge subtitle)
+            "subtitle": subtitle_raw,  # Vẫn giữ subtitle gốc nếu cần
             "authors": authors_str,
-            "publisher": info.get("publisher", "Unknown"),
+            "publisher": publisher,
             "publish_year": year,
             "category": category_str,
             "language": info.get("language", "en"),
