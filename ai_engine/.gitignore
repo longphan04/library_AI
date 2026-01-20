@@ -20,7 +20,7 @@ data/vector_db/*
 
 # 4. GIỮ LẠI CẤU TRÚC THƯ MỤC
 !data/raw/.gitkeep
-!data/processed/.gitkeep
+!data/processed/chat_sessions/.gitkeep
 !data/rich_text/.gitkeep
 !data/vector_db/.gitkeep
 !logs/.gitkeep

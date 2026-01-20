@@ -1,0 +1,7 @@
+docker-compose down -v
+docker-compose up -d
+Get-Content test_data.sql | docker exec -i mysql_db mysql -uroot -proot library_db
+# Đếm số bảng
+docker exec mysql_db mysql -uroot -proot library_db -e "SHOW TABLES;"
+# Đếm users
+docker exec mysql_db mysql -uroot -proot library_db -e "SELECT COUNT(*) as user_count FROM users;"
