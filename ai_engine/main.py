@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 
 from config.logging_config import setup_logging
 
@@ -51,10 +52,10 @@ def main():
         chat_main()
 
     elif args.command == "api":
-        print(">>> STARTING API SERVER on http://0.0.0.0:9999")
-        print(">>> Use Ctrl+C to stop")
+        port = int(os.environ.get("PORT", 10000))
+        print(f">>> STARTING API SERVER on http://0.0.0.0:{port}")
         from src.api.app import run
-        run(host="0.0.0.0", port=9999, debug=False)
+        run(host="0.0.0.0", port=port, debug=False)
 
 
 if __name__ == "__main__":
