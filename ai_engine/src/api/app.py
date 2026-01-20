@@ -527,13 +527,17 @@ def job_detail(job_id: str):
 
 
 # ---- Runner ----
-def run(host: str = "0.0.0.0", port: int = 9999, debug: bool = False):
-    logger.info("Starting API on %s:%s (debug=%s)", host, port, debug)
+def run(host: str = "0.0.0.0", port: int = 10000, debug: bool = False):
+    print(f">>> Starting server at http://{host}:{port}")
     app.run(host=host, port=port, debug=debug)
 
 
 if __name__ == "__main__":
-    host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "9999"))
+    host = "0.0.0.0"
+
+    # ⚠️ Render BẮT BUỘC dùng biến PORT
+    port = int(os.environ.get("PORT", 10000))
+
     debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+
     run(host=host, port=port, debug=debug)
