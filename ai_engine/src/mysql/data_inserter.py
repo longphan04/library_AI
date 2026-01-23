@@ -3,6 +3,7 @@ import re
 from typing import Optional, List
 
 from src.database import get_db
+from config.categories import CATEGORIES_MAPPING  # Import categories mapping
 
 # Get logger (will use centralized config)
 logger = logging.getLogger("DataInserter")
@@ -46,20 +47,20 @@ class DataInserter:
         try:
             # Extract data
             api_id = processed_data.get("id")
-            isbn = processed_data.get("identifier")
+            identifier = processed_data.get("identifier")
             title = processed_data.get("title")
             description = processed_data.get("description", "")
             
-            # Parse year
-            year_str = processed_data.get("published_year", "N/A")
+            # Parse year - FIX: use publish_year
+            year_str = processed_data.get("publish_year", "N/A")
             publish_year = int(year_str) if year_str.isdigit() else None
             
             # Language mapping
             lang_code = processed_data.get("language", "en")
             language = self._map_language(lang_code)
             
-            # Cover URL
-            cover_url = processed_data.get("thumbnail")
+            # Cover URL - Support both field names
+            cover_url = processed_data.get("cover_url") or processed_data.get("thumbnail")
             
             # Publisher
             publisher_name = processed_data.get("publisher", "Unknown")
@@ -76,27 +77,27 @@ class DataInserter:
             # Assign shelf
             shelf_id = self._assign_shelf(categories)
             
-            # Check if book already exists (by ISBN)
-            if isbn:
+            # Check if book already exists (by identifier)
+            if identifier:
                 self.cursor.execute(
-                    "SELECT book_id FROM books WHERE isbn = %s",
-                    (isbn,)
+                    "SELECT book_id FROM books WHERE identifier = %s",
+                    (identifier,)
                 )
                 existing = self.cursor.fetchone()
                 if existing:
-                    logger.info(f"Book already exists: {title} (ISBN: {isbn})")
+                    logger.info(f"Book already exists: {title} (identifier: {identifier})")
                     self.stats["books_skipped"] += 1
                     return existing['book_id']
             
             # Insert book
             self.cursor.execute("""
                 INSERT INTO books (
-                    isbn, title, description, publish_year,
+                    identifier, title, description, publish_year,
                     language, cover_url, publisher_id, shelf_id,
-                    status, total_copies, available_copies
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    status, total_copies, available_copies, total_borrow_count
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                isbn,
+                identifier,
                 title,
                 description if description else None,  # Full description
                 publish_year,
@@ -105,8 +106,9 @@ class DataInserter:
                 publisher_id,
                 shelf_id,
                 'ACTIVE',
-                0,  # No physical copies yet
-                0
+                0,  # total_copies - No physical copies yet
+                0,  # available_copies
+                0   # total_borrow_count
             ))
             
             book_id = self.cursor.lastrowid
@@ -143,26 +145,31 @@ class DataInserter:
     
     def _normalize_categories(self, categories_raw: List[str]) -> List[str]:
         """
-        Normalize category names.
+        Normalize category names and convert to Vietnamese.
         Examples:
-            "Computers / Programming" → "Programming"
-            "Fiction & Literature" → "Fiction"
+            "Computers / Programming" → "Lập trình"
+            "Fiction & Literature" → "Tiểu thuyết"
+            "Technology" → "Công nghệ"
         """
         normalized = []
         for cat in categories_raw:
             if not cat or cat == "N/A":
                 continue
             
-            # Split by / and take last part
-            parts = cat.split('/')
-            last_part = parts[-1].strip()
-            
-            # Remove " & Literature" suffix
-            last_part = re.sub(r'\s*&\s*(Literature|Fiction)$', '', last_part)
-            
-            normalized.append(last_part)
+            # Split by , and process each category
+            parts = cat.split(',')
+            for part in parts:
+                part = part.strip()
+                
+                # Map to Vietnamese if exists in mapping
+                vietnamese = CATEGORIES_MAPPING.get(part)
+                if vietnamese:
+                    normalized.append(vietnamese)
+                else:
+                    # Fallback: use normalized English name
+                    normalized.append(part)
         
-        return list(set(normalized)) if normalized else ["General"]
+        return list(set(normalized)) if normalized else ["Tổng hợp"]
     
     def _parse_authors(self, authors_str: str) -> List[str]:
         """Parse authors string to list"""
@@ -263,19 +270,38 @@ class DataInserter:
         return author_id
     
     def _assign_shelf(self, categories: List[str]) -> int:
-        """Assign shelf based on category"""
-        # Category → Shelf mapping
+        """Assign shelf based on Vietnamese category names (aligned with migration.sql)"""
+        # Category → Shelf mapping (20 categories from migration.sql)
         category_to_shelf = {
-            "Programming": "1A-01",
-            "Computers": "1A-01",
-            "AI": "1A-02",
-            "Artificial Intelligence": "1A-02",
-            "Data Science": "1A-03",
-            "Machine Learning": "1A-03",
-            "History": "1B-01",
-            "Novel": "1C-01",
-            "Fiction": "1C-02",
-            "Science": "1D-01"
+            # Technology & Programming (Day 1A)
+            "Công nghệ thông tin": "1A-01",
+            "Khoa học máy tính": "1A-01",
+            "Lập trình": "1A-01",
+            "Trí tuệ nhân tạo": "1A-02",
+            "Khoa học dữ liệu": "1A-03",
+            "Mạng máy tính": "1A-04",
+            "An toàn thông tin": "1A-05",
+            
+            # Science & Math (Day 1D)
+            "Toán học": "1D-01",
+            "Vật lý": "1D-02",
+            "Hóa học": "1D-03",
+            "Sinh học": "1D-04",
+            
+            # Business & Economics (Day 1B)
+            "Kinh tế": "1B-01",
+            "Quản trị kinh doanh": "1B-02",
+            "Marketing": "1B-03",
+            "Tài chính - Ngân hàng": "1B-04",
+            
+            # Skills & Psychology (Day 1B)
+            "Kỹ năng mềm": "1B-05",
+            "Tâm lý học": "1B-05",
+            
+            # Humanities (Day 1C)
+            "Văn học": "1C-01",
+            "Lịch sử": "1C-02",
+            "Ngoại ngữ": "1C-03"
         }
         
         for cat in categories:
@@ -283,7 +309,7 @@ class DataInserter:
                 shelf_code = category_to_shelf[cat]
                 return self._get_shelf_id(shelf_code)
         
-        # Default shelf
+        # Default shelf if no match (Tech shelf)
         return self._get_shelf_id("1A-01")
     
     def _get_shelf_id(self, code: str) -> int:

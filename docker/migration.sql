@@ -78,15 +78,21 @@ CREATE TABLE user_roles (
 
 -- =========================================================
 -- Bảng Auth_Tokens
--- Dùng để: xác nhận email, quên mật khẩu qua email. Lưu token dạng hash + hạn dùng + trạng thái đã dùng.
+-- Dùng để: xác nhận email (WEB link / APP OTP), quên mật khẩu qua email.
+-- Lưu token dạng hash + hạn dùng + trạng thái đã dùng.
 -- =========================================================
 CREATE TABLE auth_tokens (
     token_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
-    purpose ENUM('VERIFY_EMAIL','RESET_PASSWORD') NOT NULL DEFAULT 'RESET_PASSWORD',
+    -- VERIFY_EMAIL: web click link
+    -- VERIFY_EMAIL_OTP: mobile app nhập OTP 6 số
+    -- RESET_PASSWORD: reset password
+    purpose ENUM('VERIFY_EMAIL','VERIFY_EMAIL_OTP','RESET_PASSWORD') NOT NULL DEFAULT 'RESET_PASSWORD',
     token_hash VARCHAR(255) NOT NULL,
     expires_at DATETIME NOT NULL,
     used_at DATETIME DEFAULT NULL,
+    -- Chỉ dùng cho OTP (VERIFY_EMAIL_OTP): đếm số lần nhập sai để giới hạn brute-force
+    otp_fail_count INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE KEY uq_auth_token_hash (token_hash),
@@ -173,12 +179,12 @@ CREATE TABLE shelves (
 
 -- =========================================================
 -- Bảng Books (đầu sách)
--- Dùng để: thông tin sách cho catalog (ISBN, title, cover, category...), KHÔNG phải từng cuốn.
+-- Dùng để: thông tin sách cho catalog (identifier, title, cover, category...), KHÔNG phải từng cuốn.
 -- Có cache total/available để dashboard nhanh (tuỳ bạn dùng hay bỏ).
 -- =========================================================
 CREATE TABLE books (
     book_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    isbn VARCHAR(20) DEFAULT NULL,
+    identifier VARCHAR(20) NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT DEFAULT NULL,
     publish_year INT DEFAULT NULL,
@@ -197,6 +203,7 @@ CREATE TABLE books (
     -- Cache số lượng (tuỳ chọn)
     total_copies INT NOT NULL DEFAULT 0,
     available_copies INT NOT NULL DEFAULT 0,
+    total_borrow_count INT NOT NULL DEFAULT 0,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -205,6 +212,7 @@ CREATE TABLE books (
     INDEX idx_books_publisher (publisher_id),
     INDEX idx_books_year (publish_year),
     INDEX idx_books_shelf (shelf_id),
+    UNIQUE KEY uq_books_identifier (identifier),
 
     CONSTRAINT fk_books_publisher
         FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id) ON DELETE SET NULL,
@@ -336,6 +344,13 @@ CREATE TABLE borrow_tickets (
 
   renew_count TINYINT NOT NULL DEFAULT 0,  -- số lần gia hạn (chỉ 1 lần)
 
+  overdue_notified BOOLEAN NOT NULL DEFAULT FALSE,  
+  -- đánh dấu ĐÃ gửi thông báo quá hạn hay CHƯA
+  -- dùng cho cron, tránh gửi thông báo BORROW_OVERDUE nhiều lần
+
+  returned_at DATETIME NULL,     -- thời điểm trả sách (khi chuyển sang RETURNED)
+  cancelled_at DATETIME NULL,    -- thời điểm hủy phiếu (khi chuyển sang CANCELLED)
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -368,7 +383,7 @@ CREATE TABLE borrow_items (
     returned_at DATETIME DEFAULT NULL,      -- thời điểm trả
     returned_by BIGINT DEFAULT NULL,         -- ai nhận trả (sẽ là staff)
 
-    status ENUM('BORROWED','RETURNED','REMOVED') NOT NULL DEFAULT 'BORROWED',
+    status ENUM('BORROWED','RETURNED','REMOVED',"CANCELLED") NOT NULL DEFAULT 'BORROWED',
 
     UNIQUE (ticket_id, copy_id),
 
@@ -385,6 +400,34 @@ CREATE TABLE borrow_items (
         FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE RESTRICT,
     CONSTRAINT fk_bi_returned_by
         FOREIGN KEY (returned_by) REFERENCES users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- Bảng Notifications
+-- Dùng để: lưu thông báo gửi đến user (member/staff).
+-- =========================================================
+CREATE TABLE notifications (
+    notification_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    type ENUM(
+        'BORROW_CREATED',
+        'BORROW_APPROVED',
+        'BORROW_PICKED_UP',
+        'BORROW_RETURNED',
+        'BORROW_CANCELLED',
+        'BORROW_OVERDUE'
+    ) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    reference_id BIGINT DEFAULT NULL,  -- borrow_ticket_id
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_notification_user_read (user_id, is_read),
+    INDEX idx_notification_created (created_at),
+
+    CONSTRAINT fk_notification_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -425,6 +468,27 @@ CREATE TABLE ticket_fines (
 
 
 -- =========================================================
+-- Bảng Book_Views (lịch sử xem chi tiết sách của user)
+-- Dùng để gợi ý sách dựa trên hành vi xem
+-- =========================================================
+CREATE TABLE book_views (
+  view_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  book_id BIGINT NOT NULL,
+  viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  INDEX idx_view_user (user_id),
+  INDEX idx_view_book (book_id),
+  INDEX idx_view_time (viewed_at),
+
+  CONSTRAINT fk_view_user
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+  CONSTRAINT fk_view_book
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
+-- =========================================================
 -- TRIGGERS tự động cập nhật số lượng sách trong books khi thay đổi book_copies
 -- và tự động đổi trạng thái book_copies khi mượn/trả trong borrow_items
 -- =========================================================
@@ -437,7 +501,8 @@ DROP TRIGGER IF EXISTS trg_copies_ai;
 DROP TRIGGER IF EXISTS trg_copies_au;
 DROP TRIGGER IF EXISTS trg_copies_ad;
 
-DROP TRIGGER IF EXISTS trg_bi_ai;
+-- NOTE: trg_bi_ai removed (handled in backend code instead)
+-- DROP TRIGGER IF EXISTS trg_bi_ai;
 DROP TRIGGER IF EXISTS trg_bi_au;
 
 DELIMITER $$
@@ -506,37 +571,38 @@ END$$
    - Update borrow_item BORROWED->DAMAGED  => copy -> REMOVED (vì copy table không có DAMAGED)
    ========================================================= */
 
-CREATE TRIGGER trg_bi_ai
-AFTER INSERT ON borrow_items
-FOR EACH ROW
-BEGIN
-  UPDATE book_copies
-  SET status = 'BORROWED'
-  WHERE copy_id = NEW.copy_id AND status = 'AVAILABLE';
+-- NOTE: trg_bi_ai removed (handled in backend code instead)
+-- CREATE TRIGGER trg_bi_ai
+-- AFTER INSERT ON borrow_items
+-- FOR EACH ROW
+-- BEGIN
+--   UPDATE book_copies
+--   SET status = 'BORROWED'
+--   WHERE copy_id = NEW.copy_id AND status = 'AVAILABLE';
+--
+--   IF ROW_COUNT() = 0 THEN
+--     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Copy is not AVAILABLE, cannot borrow.';
+--   END IF;
+-- END$$
 
-  IF ROW_COUNT() = 0 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Copy is not AVAILABLE, cannot borrow.';
-  END IF;
-END$$
+-- CREATE TRIGGER trg_bi_au
+-- AFTER UPDATE ON borrow_items
+-- FOR EACH ROW
+-- BEGIN
+--   IF OLD.status = 'BORROWED' AND NEW.status = 'RETURNED' THEN
+--     UPDATE book_copies
+--     SET status = 'AVAILABLE'
+--     WHERE copy_id = NEW.copy_id;
+--   END IF;
 
-CREATE TRIGGER trg_bi_au
-AFTER UPDATE ON borrow_items
-FOR EACH ROW
-BEGIN
-  IF OLD.status = 'BORROWED' AND NEW.status = 'RETURNED' THEN
-    UPDATE book_copies
-    SET status = 'AVAILABLE'
-    WHERE copy_id = NEW.copy_id;
-  END IF;
+--   IF OLD.status = 'BORROWED' AND NEW.status = 'DAMAGED' THEN
+--     UPDATE book_copies
+--     SET status = 'REMOVED'
+--     WHERE copy_id = NEW.copy_id;
+--   END IF;
+-- END$$
 
-  IF OLD.status = 'BORROWED' AND NEW.status = 'DAMAGED' THEN
-    UPDATE book_copies
-    SET status = 'REMOVED'
-    WHERE copy_id = NEW.copy_id;
-  END IF;
-END$$
-
-DELIMITER ;
+-- DELIMITER ;
 
 
 -- =========================================================
@@ -550,26 +616,48 @@ INSERT INTO roles(name, description) VALUES
 -- Seed dữ liệu kệ sách mẫu
 -- =========================================================
 INSERT INTO shelves (code, name) VALUES
-('1A-01', 'Dãy 1A - Kệ 01'),
-('1A-02', 'Dãy 1A - Kệ 02'),
-('1A-03', 'Dãy 1A - Kệ 03'),
-('1A-04', 'Dãy 1A - Kệ 04'),
-('1A-05', 'Dãy 1A - Kệ 05'),
+('1A-01', 'Day 1A - Ke 01'),
+('1A-02', 'Day 1A - Ke 02'),
+('1A-03', 'Day 1A - Ke 03'),
+('1A-04', 'Day 1A - Ke 04'),
+('1A-05', 'Day 1A - Ke 05'),
 
-('1B-01', 'Dãy 1B - Kệ 01'),
-('1B-02', 'Dãy 1B - Kệ 02'),
-('1B-03', 'Dãy 1B - Kệ 03'),
-('1B-04', 'Dãy 1B - Kệ 04'),
-('1B-05', 'Dãy 1B - Kệ 05'),
+('1B-01', 'Day 1B - Ke 01'),
+('1B-02', 'Day 1B - Ke 02'),
+('1B-03', 'Day 1B - Ke 03'),
+('1B-04', 'Day 1B - Ke 04'),
+('1B-05', 'Day 1B - Ke 05'),
 
-('1C-01', 'Dãy 1C - Kệ 01'),
-('1C-02', 'Dãy 1C - Kệ 02'),
-('1C-03', 'Dãy 1C - Kệ 03'),
-('1C-04', 'Dãy 1C - Kệ 04'),
-('1C-05', 'Dãy 1C - Kệ 05'),
+('1C-01', 'Day 1C - Ke 01'),
+('1C-02', 'Day 1C - Ke 02'),
+('1C-03', 'Day 1C - Ke 03'),
+('1C-04', 'Day 1C - Ke 04'),
+('1C-05', 'Day 1C - Ke 05'),
 
-('1D-01', 'Dãy 1D - Kệ 01'),
-('1D-02', 'Dãy 1D - Kệ 02'),
-('1D-03', 'Dãy 1D - Kệ 03'),
-('1D-04', 'Dãy 1D - Kệ 04'),
-('1D-05', 'Dãy 1D - Kệ 05');
+('1D-01', 'Day 1D - Ke 01'),
+('1D-02', 'Day 1D - Ke 02'),
+('1D-03', 'Day 1D - Ke 03'),
+('1D-04', 'Day 1D - Ke 04'),
+('1D-05', 'Day 1D - Ke 05');
+
+INSERT INTO categories (name, image) VALUES
+('Công nghệ thông tin', 'category/it.jpg'),
+('Khoa học máy tính', 'category/computer_science.jpg'),
+('Lập trình', 'category/programming.jpg'),
+('Trí tuệ nhân tạo', 'category/ai.jpg'),
+('Khoa học dữ liệu', 'category/data_science.jpg'),
+('Mạng máy tính', 'category/network.jpg'),
+('An toàn thông tin', 'category/cyber_security.jpg'),
+('Toán học', 'category/math.jpg'),
+('Vật lý', 'category/physics.jpg'),
+('Hóa học', 'category/chemistry.jpg'),
+('Sinh học', 'category/biology.jpg'),
+('Kinh tế', 'category/economics.jpg'),
+('Quản trị kinh doanh', 'category/business.jpg'),
+('Marketing', 'category/marketing.jpg'),
+('Tài chính - Ngân hàng', 'category/finance.jpg'),
+('Kỹ năng mềm', 'category/soft_skills.jpg'),
+('Tâm lý học', 'category/psychology.jpg'),
+('Văn học', 'category/literature.jpg'),
+('Lịch sử', 'category/history.jpg'),
+('Ngoại ngữ', 'category/language.jpg');
