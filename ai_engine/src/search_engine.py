@@ -142,7 +142,7 @@ class SearchEngine:
 
                 meta = results['metadatas'][0][i]
                 recommendations.append({
-                    "identifier": meta.get("isbn", ""),
+                    "identifier": meta.get("identifier", ""),
                     "title": meta.get("title", "Unknown"),
                     "authors": meta.get("authors", "Unknown"),
                     "category": meta.get("category", ""),
@@ -171,7 +171,7 @@ class SearchEngine:
 
         metadata = book_data['metadata']
         return {
-            "identifier": metadata.get("isbn", ""),
+            "identifier": metadata.get("identifier", ""),
             "title": metadata.get("title", "Unknown"),
             "authors": metadata.get("authors", "Unknown"),
             "category": metadata.get("category", ""),

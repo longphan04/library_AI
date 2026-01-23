@@ -38,6 +38,7 @@ from src.indexer import Indexer
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
 from src.search_engine import SearchEngine
+from src.rag.rag_engine import RAGEngine
 from src.database import get_db, DatabaseConnection
 
 
@@ -142,6 +143,17 @@ def get_database() -> Any:
             logger.info("Initializing Database connection (lazy)...")
             _singletons["database"] = get_db()
         return _singletons["database"]
+
+
+def get_rag_engine(top_k=5) -> Any:
+    """Return a RAGEngine instance. Uses a singleton for the process."""
+    with _singletons_lock:
+        if "rag_engine" not in _singletons:
+            logger.info("Initializing RAGEngine (lazy)...")
+            _singletons["rag_engine"] = RAGEngine(top_k=top_k)
+        # Update top_k just in case
+        _singletons["rag_engine"].top_k = top_k
+        return _singletons["rag_engine"]
 
 
 # ---- Job tracking for background tasks ----
@@ -402,36 +414,24 @@ def api_chat():
     # Normalize filter keys before forwarding to search
     filters = _normalize_filters(filters)
 
-    # 1) Retrieve top passages/books using semantic search
+    # 1) Retrieve RAG Engine
     try:
-        se = get_search_engine()
-        results = se.search(query=message, filters=filters, top_k=top_k)
+        rag = get_rag_engine(top_k=top_k)
     except Exception as e:
-        logger.exception("Search during chat failed")
-        results = []
+        return error(f"Failed to init RAG Engine: {e}", 500)
 
-    # 2) Synthesize a short answer (simple rule-based RAG)
-    #    For now create an answer that lists top titles and a suggested next action.
-    if results:
-        titles = [f"{r.get('title','Unknown')} (score={r.get('score',0)})" for r in results]
-        snippets = [r.get("snippet","") for r in results]
-        # Build short answer
-        answer_lines = []
-        answer_lines.append("Mình tìm thấy một số cuốn liên quan:")
-        for i, r in enumerate(results[:5], start=1):
-            t = r.get("title", "Unknown")
-            a = r.get("authors", "")
-            cat = r.get("category", "")
-            snippet = r.get("snippet", "")
-            answer_lines.append(f"{i}. {t} — {a} [{cat}]")
-            if snippet:
-                # include short snippet
-                answer_lines.append(f"   \"{snippet[:180]}...\"")
-        answer_lines.append("")
-        answer_lines.append("Bạn muốn mình trả kết quả chi tiết hơn, gợi ý sách tương tự, hay lưu vào danh sách?")
-        answer = "\n".join(answer_lines)
-    else:
-        answer = "Mình không tìm thấy kết quả phù hợp. Bạn muốn mình thử tìm rộng hơn hoặc gợi ý thể loại?"
+    # 2) Generate Answer using Logic (Intent + Search + History)
+    try:
+        answer = rag.generate_answer(question=message, session_id=session_id)
+        
+        # Get context sources from RAGEngine session
+        rag_session = rag.get_session(session_id)
+        results = rag_session.last_search_results
+        
+    except Exception as e:
+        logger.exception("RAG generation failed")
+        answer = "❌ Đã có lỗi xảy ra khi xử lý câu hỏi của bạn."
+        results = []
 
     append_message(session, "assistant", answer)
 
