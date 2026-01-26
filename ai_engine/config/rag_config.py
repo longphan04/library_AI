@@ -7,7 +7,7 @@ import os
 
 # Gemini API Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-1.5-flash"  # Changed from gemini-2.5-pro to avoid quota issues
 
 # Search Configuration
 DEFAULT_TOP_K = 5
