@@ -5,7 +5,7 @@ PROMPT + THÔNG TIN THƯ VIỆN (SINGLE SOURCE OF TRUTH)
 """
 
 # =====================================================
-# 🏛️ THÔNG TIN THƯ VIỆN (HARD-CODE – CHƯA CẦN DATABASE)
+# THÔNG TIN THƯ VIỆN (HARD-CODE – CHƯA CẦN DATABASE)
 # =====================================================
 
 LIBRARY_INFO = {
@@ -19,7 +19,7 @@ LIBRARY_INFO = {
     ],
     "borrow_policy": {
         "fee": "Mượn sách hoàn toàn miễn phí",
-        "duration": "Thời hạn mượn tối đa 14 ngày",
+        "duration": "Thời hạn mượn tối đa 10 ngày",
         "renew": "Có thể gia hạn nếu sách chưa có người đặt trước"
     },
     "penalty_policy": {
@@ -30,7 +30,7 @@ LIBRARY_INFO = {
 }
 
 # =====================================================
-# 🧠 SYSTEM PROMPT (LUẬT CỨNG – CHỐNG ẢO GIÁC)
+# SYSTEM PROMPT (LUẬT CỨNG – CHỐNG ẢO GIÁC)
 # =====================================================
 
 SYSTEM_PROMPT = """
@@ -73,7 +73,7 @@ PHONG CÁCH
 """
 
 # =====================================================
-# 🧾 USER PROMPT TEMPLATE (BẮT BUỘC ĐỦ BIẾN)
+# USER PROMPT TEMPLATE (BẮT BUỘC ĐỦ BIẾN)
 # =====================================================
 
 USER_PROMPT_TEMPLATE = """

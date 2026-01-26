@@ -2,76 +2,72 @@ from .rag_engine import RAGEngine
 
 
 def main():
-    # ===============================
-    # 1️⃣ KHỞI TẠO RAG ENGINE
-    # ===============================
-    # top_k = 5 nghĩa là mỗi lần hỏi sẽ lấy 5 document gần nhất trong vector DB
+    """Main chat loop for CLI testing"""
+    
+    # Initialize RAG Engine
     rag = RAGEngine(top_k=5)
 
+    print("="*60)
     print("AI Library RAG Chatbot")
+    print("="*60)
     print("Gõ 'exit' để thoát\n")
 
-    # ===============================
-    # 3️⃣ LẤY DANH SÁCH CÂU HỎI GỢI Ý
-    # ===============================
-    # Các câu này thường được sinh sẵn từ hệ thống (FAQ / popular questions)
-    suggestions = rag.get_suggested_questions()
+    # Hardcoded suggestions (don't rely on non-existent method)
+    suggestions = [
+        "Tìm sách về Python",
+        "Sách Machine Learning hay nhất",
+        "Thư viện có bao nhiêu cuốn sách?",
+        "Giờ mở cửa thư viện?",
+        "Quy định mượn sách như thế nào?"
+    ]
 
-    # ===============================
-    # 4️⃣ HIỂN THỊ DANH SÁCH GỢI Ý
-    # ===============================
-    print("💡 Gợi ý câu hỏi:")
+    # Show suggestions
+    print("Gợi ý câu hỏi:")
     for i, q in enumerate(suggestions, start=1):
         print(f"  {i}. {q}")
 
-    print("\n👉 Bạn có thể nhập số (1–{}) hoặc gõ câu hỏi riêng.\n".format(len(suggestions)))
+    print(f"\nBạn có thể nhập số (1-{len(suggestions)}) hoặc gõ câu hỏi riêng.\n")
 
-    # ===============================
-    # 5️⃣ VÒNG LẶP CHAT CHÍNH
-    # ===============================
+    # Main chat loop
     while True:
-        question = input("Ban: ")
-        if question.lower() in ["exit", "quit"]:
+        try:
+            question = input("Ban: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nThoát...")
+            break
+            
+        if not question:
+            continue
+            
+        if question.lower() in ["exit", "quit", "q"]:
+            print("Tạm biệt!")
             break
 
-        # ===============================
-        # 5.2️⃣ KIỂM TRA XEM USER CÓ NHẬP SỐ KHÔNG
-        # ===============================
-        # Nếu user nhập số -> chọn câu hỏi gợi ý
-        if user_input.isdigit():
-            idx = int(user_input) - 1
-
-            # Kiểm tra chỉ số có hợp lệ không
+        # Check if user input is a number (selecting suggestion)
+        if question.isdigit():
+            idx = int(question) - 1
             if 0 <= idx < len(suggestions):
                 question = suggestions[idx]
-                print(f"👉 Bạn chọn: {question}")
+                print(f">> Bạn chọn: {question}")
             else:
-                print("❌ Số không hợp lệ.")
+                print("Số không hợp lệ. Vui lòng chọn từ 1-{}.".format(len(suggestions)))
                 continue
 
-        # ===============================
-        # 5.3️⃣ NGƯỜI DÙNG NHẬP CÂU HỎI TỰ DO
-        # ===============================
-        else:
-            question = user_input
-
-        # ===============================
-        # 6️⃣ GỌI RAG ENGINE ĐỂ SINH CÂU TRẢ LỜI
-        # ===============================
-        # Bên trong sẽ:
-        #   - Embed câu hỏi
-        #   - Search vector DB (Chroma / FAISS / etc)
-        #   - Lấy top_k document liên quan
-        #   - Gửi context + question cho LLM
-        answer = rag.generate_answer(question)
-
-        print("\nBot:")
-        print(answer)
+        # Generate answer
+        try:
+            # Use a static session ID for CLI (or generate random one at start)
+            if not hasattr(main, "session_id"):
+                import uuid
+                main.session_id = str(uuid.uuid4())
+                
+            answer = rag.generate_answer(question, session_id=main.session_id)
+            print("\nBot:")
+            print(answer)
+        except Exception as e:
+            print(f"\nLỗi: {e}")
+        
         print("-" * 60)
 
 
-# ===============================
-# 8️⃣ ĐIỂM ENTRY POINT CỦA CHƯƠNG TRÌNH
-# ===============================
 if __name__ == "__main__":
     main()

@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import datetime
 from config.settings import settings
+from config.categories import CATEGORIES_MAPPING
 from config.logging_config import get_logger
 
 # Get logger (config done in main.py)
@@ -212,15 +213,58 @@ class DataProcessor:
             return None
 
         # --- LÀM SẠCH DỮ LIỆU KHÁC ---
-        thumbnail = info.get("imageLinks", {}).get("thumbnail", "")
-        if thumbnail:
-            thumbnail = thumbnail.replace("&zoom=1", "").replace("&edge=curl", "")
+        # Lưu FULL image links từ Google Books (không clean URL)
+        # Để sau này có module download images, sẽ xử lý riêng
+        image_links = info.get("imageLinks", {})
+        cover_url = image_links.get("thumbnail", "")  # Primary image (zoom=1)
+        small_thumbnail = image_links.get("smallThumbnail", "")  # Smaller version (zoom=5)
+        
+        # NOTE: Giữ nguyên full URL với &zoom=1, &edge=curl
+        # Không remove parameters để đảm bảo link hoạt động lâu dài
+        # Module tải ảnh về sau sẽ xử lý việc tải và lưu local
 
         published_date = info.get("publishedDate", "N/A")
         year = published_date[:4] if len(published_date) >= 4 else "N/A"
 
+        # Lấy TẤT CẢ categories và xử lý & để split
         categories = info.get("categories", ["General"])
-        category_str = categories[0] if categories else "General"
+        if isinstance(categories, list) and categories:
+            # Process each category
+            processed_cats = []
+            for cat in categories:
+                if not cat:
+                    continue
+                # Split by & to separate combined categories
+                # "Business & Economics" → ["Business", "Economics"]
+                if '&' in cat:
+                    parts = [p.strip() for p in cat.split('&')]
+                    processed_cats.extend(parts)
+                else:
+                    processed_cats.append(cat.strip())
+            
+            # Convert to Vietnamese using CATEGORIES_MAPPING
+            vietnamese_cats = []
+            for cat in processed_cats:
+                vietnamese = CATEGORIES_MAPPING.get(cat, "Khác")  # Default to "Khác" if not found
+                vietnamese_cats.append(vietnamese)
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_cats = []
+            for cat in vietnamese_cats:
+                if cat not in seen:
+                    seen.add(cat)
+                    unique_cats.append(cat)
+            
+            # Remove "Khác" if there are other categories
+            if len(unique_cats) > 1 and "Khác" in unique_cats:
+                unique_cats = [c for c in unique_cats if c != "Khác"]
+            
+            # Join with comma: ["Computers", "Programming"] -> "Khoa học máy tính, Lập trình"
+            category_str = ", ".join(unique_cats) if unique_cats else "Khác"
+        else:
+            category_str = "Khác"
+        
         
         publisher = self.clean_text(info.get("publisher", "Unknown"))
 
@@ -245,7 +289,8 @@ class DataProcessor:
             "publish_year": year,
             "category": category_str,
             "language": info.get("language", "en"),
-            "thumbnail": thumbnail,
+            "cover_url": cover_url,  # Primary thumbnail (full URL)
+            "small_thumbnail": small_thumbnail,  # Smaller thumbnail (full URL)
             "google_link": info.get("infoLink", ""),
             "description": description, 
             "rich_text": rich_text 
