@@ -11,6 +11,7 @@ Endpoints:
   POST   /ai/chat/suggest        -> return starter prompt suggestions for chat
   GET    /ai/chat/history/<sid>  -> load chat history for session
   DELETE /ai/chat/history/<sid>  -> clear chat history for session
+  POST   /ai/description         -> generate detailed book description
   POST   /ai/data/sync           -> trigger data sync/index when new books are added
 
 Notes:
@@ -39,6 +40,7 @@ from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
 from src.search_engine import SearchEngine
 from src.database import get_db, DatabaseConnection
+from src.description import BookDescriptionGenerator
 
 
 def _normalize_filters(filters: Optional[Dict]) -> Optional[Dict]:
@@ -106,6 +108,7 @@ def factory_get_database() -> Any:
     """
     return get_db()
 
+
 # ---- App & logging ----
 app = Flask(__name__)
 if os.getenv("API_ENABLE_CORS", "true").lower() in ("1", "true", "yes"):
@@ -142,6 +145,15 @@ def get_database() -> Any:
             logger.info("Initializing Database connection (lazy)...")
             _singletons["database"] = get_db()
         return _singletons["database"]
+
+
+def get_description_generator() -> Any:
+    """Return a BookDescriptionGenerator instance. Uses a singleton for the process."""
+    with _singletons_lock:
+        if "description_generator" not in _singletons:
+            logger.info("Initializing BookDescriptionGenerator (lazy)...")
+            _singletons["description_generator"] = BookDescriptionGenerator()
+        return _singletons["description_generator"]
 
 
 # ---- Job tracking for background tasks ----
@@ -289,21 +301,21 @@ def api_recommend(identifier):
     try:
         # Convert identifier to string (Vector DB uses string IDs)
         identifier_str = str(identifier)
-        
+
         se = get_search_engine()
         top_k = int(request.args.get("top_k", 5))
-        
+
         # Recommend vẫn dùng internal book_id của Vector DB
         # Nếu cần lookup từ ISBN → book_id, implement sau
         recs = se.recommend(book_id=identifier_str, top_k=top_k)
-        
+
         if not recs:
             return success({
                 "identifier": identifier_str,
                 "recommendations": [],
                 "message": f"Book with identifier '{identifier_str}' not found or no similar books available"
             })
-        
+
         return success({"identifier": identifier_str, "recommendations": recs})
     except Exception as e:
         logger.exception("Recommend failed for %s", identifier)
@@ -413,8 +425,8 @@ def api_chat():
     # 2) Synthesize a short answer (simple rule-based RAG)
     #    For now create an answer that lists top titles and a suggested next action.
     if results:
-        titles = [f"{r.get('title','Unknown')} (score={r.get('score',0)})" for r in results]
-        snippets = [r.get("snippet","") for r in results]
+        titles = [f"{r.get('title', 'Unknown')} (score={r.get('score', 0)})" for r in results]
+        snippets = [r.get("snippet", "") for r in results]
         # Build short answer
         answer_lines = []
         answer_lines.append("Mình tìm thấy một số cuốn liên quan:")
@@ -543,6 +555,74 @@ def job_detail(job_id: str):
     if not job:
         return error("Job not found", 404)
     return success(job)
+
+
+@app.route("/ai/description", methods=["POST"])
+def api_description():
+    """
+    Generate detailed book description from title, authors, and category.
+
+    Request body (JSON):
+    {
+        "title": "Book Title",
+        "authors": "Author Name",
+        "category": "Category Name"
+    }
+
+    Response:
+    {
+        "status": "success",
+        "message": "ok",
+        "data": {
+            "title": "Book Title",
+            "authors": ["Author Name"],
+            "category": "Category",
+            "description": "Detailed description (min 2000 chars)",
+            "description_length": 2500,
+            "source": "google_books" or "template",
+            "book_info": {...}
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error("No JSON data provided", 400)
+
+        title = data.get("title", "").strip()
+        authors = data.get("authors", "").strip()
+        category = data.get("category", "").strip()
+
+        if not title:
+            return error("Title is required", 400)
+        if not authors:
+            return error("Authors is required", 400)
+        if not category:
+            return error("Category is required", 400)
+
+        logger.info(f"Generating description for: {title} by {authors} ({category})")
+
+        desc_gen = get_description_generator()
+        result = desc_gen.generate_description(
+            title=title,
+            authors=authors,
+            category=category
+        )
+
+        if result["status"] == "error":
+            return error(result["message"], 500)
+
+        # Chỉ trả về description và description_length
+        response_data = {
+            "description": result["data"]["description"],
+            "description_length": result["data"]["description_length"]
+        }
+
+        return success(response_data, message="Description generated successfully")
+
+    except Exception as e:
+        logger.exception("Description generation failed")
+        return error(f"Failed to generate description: {str(e)}", 500)
 
 
 # ---- Runner ----
