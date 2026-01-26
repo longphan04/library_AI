@@ -285,8 +285,9 @@ def api_search():
     try:
         se = get_search_engine()
         results = se.search(query=query_text, filters=filters, top_k=top_k)
-        # Return the normalized filters in the response so clients see what was applied
-        return success({"query": query_text, "top_k": top_k, "filters": filters, "results": results})
+        # Return the actual count of books found instead of the requested top_k
+        actual_count = len(results) if results else 0
+        return success({"query": query_text, "top_k": actual_count, "filters": filters, "results": results})
     except Exception as e:
         logger.exception("Search failed for query=%s", query_text)
         return error(str(e), 500)

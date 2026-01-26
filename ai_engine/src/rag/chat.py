@@ -30,8 +30,8 @@ def main():
     # 5️⃣ VÒNG LẶP CHAT CHÍNH
     # ===============================
     while True:
-        question = input("Ban: ")
-        if question.lower() in ["exit", "quit"]:
+        user_input = input("Ban: ")
+        if user_input.lower() in ["exit", "quit"]:
             break
 
         # ===============================
