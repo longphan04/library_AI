@@ -2,21 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="99d46cc3-f730-499c-a630-ecaf7dcd33b0" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/src/api/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/ai_engine/src/api/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/src/database.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/manual_test_search.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/output/search_results_20260116_171531.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_chat.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_crawl_process.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_docker.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_mysql_sync.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_rag_engine_full.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_real_search_with_filters.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_search_computers_jerry.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_search_engine.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_search_engine_filters.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ai_engine/tests/test_vector_flow.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -68,7 +54,7 @@
     &quot;Python tests.pytest for tests.test_description.TestBookDescriptionGenerator.test_generator_initialization.executor&quot;: &quot;Run&quot;,
     &quot;Python tests.pytest in test_description.py.executor&quot;: &quot;Run&quot;,
     &quot;Python tests.pytest in test_search_engine.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python.app.executor&quot;: &quot;Run&quot;,
+    &quot;Python.app.executor&quot;: &quot;Debug&quot;,
     &quot;Python.depcription.executor&quot;: &quot;Run&quot;,
     &quot;Python.test_search_engine.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
@@ -93,7 +79,7 @@
       <recent name="D:\library_service\library_AI\ai_engine\tests" />
     </key>
   </component>
-  <component name="RunManager" selected="Python tests.pytest in test_description.py">
+  <component name="RunManager" selected="Python.app">
     <configuration name="app" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="library_AI" />
       <option name="ENV_FILES" value="" />
@@ -196,10 +182,10 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.app" />
         <item itemvalue="Python tests.pytest in test_description.py" />
         <item itemvalue="Python tests.pytest for tests.test_description.TestBookDescriptionGenerator.test_generator_initialization" />
         <item itemvalue="Python tests.pytest for tests.test_description.TestBookDescriptionGenerator" />
-        <item itemvalue="Python.app" />
         <item itemvalue="Python tests.pytest for tests.test_depcription.test_generate_description" />
       </list>
     </recent_temporary>
@@ -238,6 +224,8 @@
       <workItem from="1769136549354" duration="10541000" />
       <workItem from="1769151144077" duration="6404000" />
       <workItem from="1769393214606" duration="3201000" />
+      <workItem from="1769399847029" duration="2926000" />
+      <workItem from="1769406849848" duration="10063000" />
     </task>
     <servers />
   </component>
@@ -261,7 +249,7 @@
     <SUITE FILE_PATH="coverage/library_AI$pytest_in_test_description_py.coverage" NAME="pytest in test_description.py Coverage Results" MODIFIED="1769148383563" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/library_AI$pytest_for_tests_test_description_TestBookDescriptionGenerator_test_generator_initialization.coverage" NAME="pytest for tests.test_description.TestBookDescriptionGenerator.test_generator_initialization Coverage Results" MODIFIED="1769140560932" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/library_AI$pytest_in_test_search_engine_py.coverage" NAME="pytest in test_search_engine.py Coverage Results" MODIFIED="1768372498768" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/library_AI$app.coverage" NAME="app Coverage Results" MODIFIED="1769089137579" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_engine/src/api" />
+    <SUITE FILE_PATH="coverage/library_AI$app.coverage" NAME="app Coverage Results" MODIFIED="1769401511249" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_engine/src/api" />
     <SUITE FILE_PATH="coverage/library_AI$pytest_for_tests_test_description_TestBookDescriptionGenerator.coverage" NAME="pytest for tests.test_description.TestBookDescriptionGenerator Coverage Results" MODIFIED="1769140551900" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/library_AI$depcription.coverage" NAME="depcription Coverage Results" MODIFIED="1769050663245" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_engine/src" />
   </component>
