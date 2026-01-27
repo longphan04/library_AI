@@ -390,45 +390,27 @@ def api_chat_suggest():
 @app.route("/ai/chat", methods=["POST"])
 def api_chat():
     """
-    Chat endpoint with RAG integration.
-
+    Minimal chat endpoint (RAG-lite).
     Body JSON:
       {
-        "session_id": "<optional - auto-generated if not provided>",
-        "message": "<user text - required>",
+        "session_id": "<optional>",
+        "message": "<user text>",
         "top_k": 5,
-        "filters": {
-            "category": "AI",          # optional - filter by category (từ FE)
-            "authors": "Author Name",  # optional
-            "year": "2024"             # optional
-        }
+        "filters": { ... }   # optional, forwarded to search
       }
-
     Response:
       {
-        "status": "success",
-        "message": "ok",
-        "data": {
-          "session_id": "...",
-          "answer": "...",
-          "sources": [ {identifier, title, authors, category, publish_year, score, richtext}, ... ],
-          "history": [...],
-          "intent": "SEARCH|SMALLTALK|FOLLOWUP|STATS|GARBAGE"  # debug info
-        }
+        "session_id": "...",
+        "answer": "...",
+        "sources": [ {id, title, authors, snippet, score}, ... ],
+        "history": [...]
       }
     """
     payload = request.get_json(silent=True) or {}
-
-    # ===== 1. INPUT VALIDATION =====
     message = (payload.get("message") or "").strip()
     if not message:
         return error("Missing 'message' in body", 400)
 
-    # Validate message length
-    if len(message) > 2000:
-        return error("Message too long. Maximum 2000 characters allowed.", 400)
-
-    # Sanitize session_id (allow alphanumeric, dash, underscore only)
     session_id = (payload.get("session_id") or "").strip()
     if session_id:
         # Validate session_id format
@@ -463,36 +445,23 @@ def api_chat():
     try:
         rag = get_rag_engine(top_k=top_k)
     except Exception as e:
-        logger.exception("Failed to init RAG Engine")
         return error(f"Failed to init RAG Engine: {e}", 500)
-
-    # ===== 6. GENERATE ANSWER USING RAG =====
-    intent = "UNKNOWN"
-    results = []
-
+    # 2) Generate Answer using RAG Engine (handles intent + search + history)
     try:
-        # Generate answer with filters (RAG handles intent classification internally)
-        answer = rag.generate_answer(question=message, session_id=session_id, filters=filters)
+        answer = rag.generate_answer(question=message, session_id=session_id)
 
-        # Get context sources and intent from RAGEngine session
+        # Get context sources from RAGEngine session
         rag_session = rag.get_session(session_id)
         results = rag_session.last_search_results if rag_session.last_search_results else []
 
-        # Get intent for debugging/analytics
-        intent = rag.classify_intent(message, rag_session)
-
-    except TimeoutError:
-        logger.warning("RAG generation timed out for session %s", session_id)
-        answer = "⏳ Yêu cầu mất quá nhiều thời gian. Vui lòng thử lại với câu hỏi ngắn hơn."
-
     except Exception as e:
-        logger.exception("RAG generation failed for session %s", session_id)
+        logger.exception("RAG generation failed")
         answer = "❌ Đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại sau."
+        results = []
 
-    # ===== 7. SAVE TO SESSION =====
     append_message(session, "assistant", answer)
 
-    # ===== 8. BUILD RESPONSE =====
+    # Save session (already saved in append_message)
     # Build sources structure to return
     sources = []
     for r in results:
@@ -502,96 +471,28 @@ def api_chat():
             "authors": r.get("authors"),
             "category": r.get("category"),
             "publish_year": r.get("publish_year"),
-            "score": round(r.get("score", 0), 4) if r.get("score") else None,
-            "richtext": r.get("richtext", "")[:500] if r.get("richtext") else None  # Truncate richtext
+            "score": r.get("score"),
+            "richtext": r.get("richtext")
         })
 
-    response_data = {
+    return success({
         "session_id": session_id,
         "answer": answer,
         "sources": sources,
-        "sources_count": len(sources),
-        "history": session["messages"],
-        "intent": intent,  # Useful for debugging/analytics
-    }
-
-    # Add filters info if provided
-    if filters:
-        response_data["applied_filters"] = filters
-
-    return success(response_data)
+        "history": session["messages"]
+    })
 
 
 @app.route("/ai/chat/history/<session_id>", methods=["GET"])
 def api_chat_history(session_id: str):
-    """
-    Get chat history for a session.
-
-    Query params:
-      - limit: max number of messages to return (default: 50)
-      - offset: skip first N messages (default: 0)
-
-    Response:
-      {
-        "session_id": "...",
-        "messages": [...],
-        "total_count": 100,
-        "has_more": true
-      }
-    """
-    # Validate session_id
-    import re
-    if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', session_id):
-        return error("Invalid session_id format", 400)
-
-    # Pagination params
-    try:
-        limit = int(request.args.get("limit", 50))
-        limit = max(1, min(limit, 200))  # Clamp between 1 and 200
-    except:
-        limit = 50
-
-    try:
-        offset = int(request.args.get("offset", 0))
-        offset = max(0, offset)
-    except:
-        offset = 0
-
     session = load_session(session_id)
     if not session or not session.get("messages"):
-        return success({
-            "session_id": session_id,
-            "messages": [],
-            "total_count": 0,
-            "has_more": False
-        })
-
-    all_messages = session.get("messages", [])
-    total_count = len(all_messages)
-    paginated_messages = all_messages[offset:offset + limit]
-    has_more = (offset + limit) < total_count
-
-    return success({
-        "session_id": session_id,
-        "messages": paginated_messages,
-        "total_count": total_count,
-        "has_more": has_more,
-        "created_at": session.get("created_at")
-    })
+        return success({"session_id": session_id, "messages": []})
+    return success({"session_id": session_id, "messages": session["messages"]})
 
 
 @app.route("/ai/chat/history/<session_id>", methods=["DELETE"])
 def api_chat_history_clear(session_id: str):
-    """
-    Clear chat history for a session.
-    Also clears the RAG session state.
-    """
-    # Validate session_id
-    import re
-    if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', session_id):
-        return error("Invalid session_id format", 400)
-
-    # Remove app session file
     path = _session_path(session_id)
     if os.path.exists(path):
         try:
@@ -599,79 +500,8 @@ def api_chat_history_clear(session_id: str):
         except Exception as e:
             logger.error("Failed to remove session file %s: %s", path, e)
             return error("Failed to clear session", 500)
-
-    # Also try to clear RAG session file
-    rag_session_path = os.path.join(CHAT_SESSION_DIR, f"rag_{session_id}.json")
-    if os.path.exists(rag_session_path):
-        try:
-            os.remove(rag_session_path)
-        except Exception as e:
-            logger.warning("Failed to remove RAG session file %s: %s", rag_session_path, e)
-
-    logger.info("Cleared chat session: %s", session_id)
-    return success({
-        "session_id": session_id,
-        "messages": [],
-        "cleared": True
-    })
-
-
-@app.route("/ai/chat/sessions", methods=["GET"])
-def api_chat_sessions_list():
-    """
-    List all active chat sessions (admin/debug endpoint).
-
-    Query params:
-      - limit: max number of sessions to return (default: 20)
-
-    Response:
-      {
-        "sessions": [
-          {"session_id": "...", "message_count": 10, "created_at": "...", "last_activity": "..."},
-          ...
-        ],
-        "total_count": 50
-      }
-    """
-    try:
-        limit = int(request.args.get("limit", 20))
-        limit = max(1, min(limit, 100))
-    except:
-        limit = 20
-
-    sessions_info = []
-
-    try:
-        # List all session files
-        if os.path.exists(CHAT_SESSION_DIR):
-            for filename in os.listdir(CHAT_SESSION_DIR):
-                if filename.endswith(".json") and not filename.startswith("rag_"):
-                    filepath = os.path.join(CHAT_SESSION_DIR, filename)
-                    try:
-                        with open(filepath, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                            messages = data.get("messages", [])
-                            last_activity = messages[-1].get("time") if messages else data.get("created_at")
-                            sessions_info.append({
-                                "session_id": data.get("id", filename.replace(".json", "")),
-                                "message_count": len(messages),
-                                "created_at": data.get("created_at"),
-                                "last_activity": last_activity
-                            })
-                    except Exception as e:
-                        logger.warning("Failed to read session file %s: %s", filename, e)
-
-        # Sort by last activity (most recent first)
-        sessions_info.sort(key=lambda x: x.get("last_activity", ""), reverse=True)
-
-        return success({
-            "sessions": sessions_info[:limit],
-            "total_count": len(sessions_info)
-        })
-
-    except Exception as e:
-        logger.exception("Failed to list chat sessions")
-        return error(f"Failed to list sessions: {str(e)}", 500)
+    # ensure removed from disk and return empty session
+    return success({"session_id": session_id, "messages": []})
 
 
 @app.route("/ai/data/sync", methods=["POST"])
