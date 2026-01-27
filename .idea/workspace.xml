@@ -182,11 +182,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.app" />
         <item itemvalue="Python tests.pytest in test_description.py" />
         <item itemvalue="Python tests.pytest for tests.test_description.TestBookDescriptionGenerator.test_generator_initialization" />
         <item itemvalue="Python tests.pytest for tests.test_description.TestBookDescriptionGenerator" />
         <item itemvalue="Python tests.pytest for tests.test_depcription.test_generate_description" />
+        <item itemvalue="Python.app" />
       </list>
     </recent_temporary>
   </component>
@@ -226,6 +226,7 @@
       <workItem from="1769393214606" duration="3201000" />
       <workItem from="1769399847029" duration="2926000" />
       <workItem from="1769406849848" duration="10063000" />
+      <workItem from="1769477164198" duration="1850000" />
     </task>
     <servers />
   </component>
@@ -242,6 +243,17 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/ai_engine/config/rag_config.py</url>
+          <line>9</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/library_AI$test_search_engine.coverage" NAME="test_search_engine Coverage Results" MODIFIED="1768557861351" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ai_engine/tests" />
