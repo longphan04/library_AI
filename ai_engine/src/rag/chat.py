@@ -34,7 +34,6 @@ def main():
 
     # Main chat loop
     while True:
-
         try:
             question = input("Ban: ").strip()
         except (KeyboardInterrupt, EOFError):
@@ -46,6 +45,7 @@ def main():
             
         if question.lower() in ["exit", "quit", "q"]:
             print("Tạm biệt!")
+
             break
 
         # Check if user input is a number (selecting suggestion)

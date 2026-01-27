@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="dataSourceStorageLocal" created-in="PY-253.29346.308">
+    <data-source name="@localhost" uuid="505091b2-664b-4977-ae8b-9030a4c35163">
+      <database-info product="MySQL" version="8.0.44" jdbc-version="4.2" driver-name="MySQL Connector/J" driver-version="mysql-connector-j-9.5.0 (Revision: a7b3c94f50efbddb9f0dd69b3e0d1aaa25305cd6)" dbms="MYSQL" exact-version="8.0.44" exact-driver-version="9.5">
+        <extra-name-characters>$</extra-name-characters>
+        <identifier-quote-string>`</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="exact" quoted-identifiers="exact" />
+      <secret-storage>master_key</secret-storage>
+      <user-name>admin</user-name>
+      <schema-mapping>
+        <introspection-scope>
+          <node kind="schema">
+            <name qname="@" />
+            <name qname="library_db" />
+          </node>
+        </introspection-scope>
+      </schema-mapping>
+    </data-source>
+  </component>
+</project>

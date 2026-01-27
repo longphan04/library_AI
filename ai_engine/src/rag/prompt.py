@@ -197,4 +197,280 @@ Hướng dẫn trả lời:
 
 Trả lời bằng tiếng Việt, thân thiện, chính xác. Có thể dùng emoji phù hợp.
 KHÔNG bịa tên sách hoặc thông tin không chính xác.
+<<<<<<< HEAD
+=======
+"""
+
+# =====================================================
+# 📖 DESCRIPTION GENERATION PROMPTS
+# =====================================================
+
+def get_description_prompt_with_preview_text(title: str, authors: str, categories: str,
+                                             publisher: str, published_date: str,
+                                             preview_text: str, max_length: int = 2000) -> str:
+    """
+    Prompt để tạo mô tả sách từ preview text (nội dung thực tế của sách).
+
+    Args:
+        title: Tên sách
+        authors: Tác giả
+        categories: Thể loại
+        publisher: Nhà xuất bản
+        published_date: Năm xuất bản
+        preview_text: Nội dung thực tế từ sách
+        max_length: Độ dài tối đa của mô tả
+
+    Returns:
+        Prompt string để gửi cho Gemini AI
+    """
+    return f"""
+Bạn là chuyên gia phân tích sách. Bạn đã đọc một phần nội dung của cuốn sách dưới đây.
+Hãy viết MÔ TẢ CHI TIẾT VÀ ĐẦY ĐỦ bằng TIẾNG VIỆT dựa trên NỘI DUNG THỰC TẾ bạn đã đọc.
+
+**THÔNG TIN SÁCH:**
+- Tên: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Xuất bản: {publisher} ({published_date})
+
+**NỘI DUNG SÁCH ĐÃ ĐỌC:**
+{preview_text}
+
+**YÊU CẦU BẮT BUỘC:**
+1. **NGÔN NGỮ:** 
+   - Viết HOÀN TOÀN bằng TIẾNG VIỆT
+   - KHÔNG DỊCH: Tên sách ("{title}"), tên tác giả ("{authors}"), tên nhà xuất bản ("{publisher}")
+   - Giữ NGUYÊN tên riêng (tên người, tên địa danh, tên công ty)
+   - Dịch TẤT CẢ các từ khác sang tiếng Việt
+   
+2. **BÁM SÁT NỘI DUNG:** Phân tích và tóm tắt từ nội dung thực tế đã đọc
+
+3. **ĐỘ DÀI:** TỐI THIỂU 500 ký tự, tối đa {max_length} ký tự
+
+4. **NỘI DUNG CẦN VIẾT (CHI TIẾT):**
+   - Giới thiệu tổng quan về sách và tác giả
+   - Chủ đề chính và phụ mà sách đề cập (dựa vào nội dung đã đọc)
+   - Cách tiếp cận/phương pháp độc đáo của tác giả
+   - Kiến thức/kỹ năng cụ thể mà sách cung cấp cho người đọc
+   - Cấu trúc và tổ chức nội dung của sách
+   - Điểm nổi bật, đóng góp quan trọng của sách
+   - Giá trị thực tế và ứng dụng của kiến thức trong sách
+   - Đối tượng độc giả phù hợp và lý do nên đọc
+   
+5. **PHONG CÁCH:**
+   - Viết CHI TIẾT, đầy đủ thông tin
+   - Viết dựa trên PHÂN TÍCH SÂU, không chung chung
+   - Nêu CỤ THỂ những gì sách trình bày với VÍ DỤ
+   - Tập trung vào GIÁ TRỊ THỰC TẾ và ĐIỂM ĐẶC BIỆT
+   - Sử dụng câu văn dài, đoạn văn phong phú
+
+6. **ĐỊNH DẠNG:**
+   - Không dùng heading, không dùng markdown, không dùng dấu đầu dòng
+   - Viết thành nhiều đoạn văn liền mạch, chi tiết
+   - Bắt đầu: "Cuốn sách..."
+   - Mỗi đoạn phát triển một ý chính
+
+**VÍ DỤ CÁCH VIẾT ĐÚNG:**
+"Cuốn sách {title} của {authors} là một tác phẩm quan trọng..." (ĐÚNG - giữ nguyên tên)
+"Tác giả {authors} đã trình bày..." (ĐÚNG - giữ nguyên tên)
+"Được xuất bản bởi {publisher}..." (ĐÚNG - giữ nguyên tên)
+
+Hãy viết MÔ TẢ CHI TIẾT BẰNG TIẾNG VIỆT (TỐI THIỂU 500 KÝ TỰ) dựa trên nội dung đã đọc:
+"""
+
+
+def get_description_prompt_with_existing_desc(title: str, authors: str, categories: str,
+                                               publisher: str, published_date: str,
+                                               existing_desc: str, max_length: int = 2000) -> str:
+    """
+    Prompt để dịch và mở rộng mô tả gốc sang tiếng Việt.
+
+    Args:
+        title: Tên sách
+        authors: Tác giả
+        categories: Thể loại
+        publisher: Nhà xuất bản
+        published_date: Năm xuất bản
+        existing_desc: Mô tả gốc (thường bằng tiếng Anh)
+        max_length: Độ dài tối đa của mô tả
+
+    Returns:
+        Prompt string để gửi cho Gemini AI
+    """
+    return f"""
+Bạn là chuyên gia phân tích sách. Hãy DỊCH VÀ MỞ RỘNG mô tả gốc dưới đây sang TIẾNG VIỆT một cách CHI TIẾT.
+
+**THÔNG TIN SÁCH:**
+- Tên: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Xuất bản: {publisher} ({published_date})
+
+**MÔ TẢ GỐC:**
+{existing_desc}
+
+**YÊU CẦU BẮT BUỘC:**
+1. **NGÔN NGỮ:** 
+   - Viết HOÀN TOÀN bằng TIẾNG VIỆT
+   - KHÔNG DỊCH: Tên sách ("{title}"), tên tác giả ("{authors}"), tên nhà xuất bản ("{publisher}")
+   - Giữ NGUYÊN tên riêng (tên người, tên địa danh, tên công ty, tên thương hiệu)
+   - Dịch TẤT CẢ các từ khác (bao gồm thuật ngữ kỹ thuật) sang tiếng Việt
+   
+2. **BÁM SÁT NỘI DUNG:** Dịch và MỞ RỘNG từ mô tả gốc, thêm chi tiết hợp lý
+
+3. **ĐỘ DÀI:** TỐI THIỂU 500 ký tự, tối đa {max_length} ký tự
+
+4. **NỘI DUNG CẦN VIẾT (CHI TIẾT):**
+   - Giới thiệu về tác giả và bối cảnh viết sách
+   - Dịch và giải thích các khái niệm/kỹ thuật cụ thể trong sách
+   - Nêu rõ sách dạy/trình bày điều gì một cách chi tiết
+   - Cấu trúc và nội dung chính của sách
+   - Giá trị và ý nghĩa của sách trong lĩnh vực
+   - Đối tượng độc giả phù hợp và lý do nên đọc
+
+5. **PHONG CÁCH:**
+   - Viết CHI TIẾT, đầy đủ, phong phú
+   - Mở rộng các ý trong mô tả gốc
+   - Giải thích rõ ràng, dễ hiểu
+   - Sử dụng câu văn dài, đoạn văn phát triển tốt
+
+6. **ĐỊNH DẠNG:**
+   - Không dùng heading, không dùng markdown, không dùng dấu đầu dòng
+   - Viết thành nhiều đoạn văn liền mạch
+   - Bắt đầu bằng: "Cuốn sách..."
+
+**VÍ DỤ CÁCH VIẾT ĐÚNG:**
+"Cuốn sách {title} của tác giả {authors} là một tác phẩm quan trọng..." (ĐÚNG)
+"Được nhà xuất bản {publisher} phát hành..." (ĐÚNG)
+
+Hãy viết MÔ TẢ CHI TIẾT BẰNG TIẾNG VIỆT (TỐI THIỂU 500 KÝ TỰ) dựa trên mô tả gốc:
+"""
+
+
+def get_description_prompt_metadata_only(title: str, authors: str, categories: str,
+                                         published_date: str, max_length: int = 2000) -> str:
+    """
+    Prompt để tạo mô tả chỉ từ metadata (tên, tác giả, thể loại).
+
+    Args:
+        title: Tên sách
+        authors: Tác giả
+        categories: Thể loại
+        published_date: Năm xuất bản
+        max_length: Độ dài tối đa của mô tả
+
+    Returns:
+        Prompt string để gửi cho Gemini AI
+    """
+    return f"""
+Bạn là chuyên gia phân tích sách. Hãy viết MÔ TẢ CHI TIẾT bằng TIẾNG VIỆT cho cuốn sách dựa trên thông tin có sẵn.
+
+**THÔNG TIN SÁCH:**
+- Tên: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Xuất bản: {published_date}
+
+**YÊU CẦU BẮT BUỘC:**
+1. **NGÔN NGỮ:** 
+   - Viết HOÀN TOÀN bằng TIẾNG VIỆT
+   - KHÔNG DỊCH: Tên sách ("{title}"), tên tác giả ("{authors}")
+   - Giữ NGUYÊN tên riêng (tên người, tên địa danh, tên công ty)
+   - Dịch TẤT CẢ các từ khác sang tiếng Việt
+   
+2. **ĐỘ DÀI:** TỐI THIỂU 500 ký tự, tối đa {max_length} ký tự
+
+3. **NỘI DUNG CẦN VIẾT (CHI TIẾT):**
+   - Giới thiệu về tác giả và uy tín của họ trong lĩnh vực
+   - Dựa vào tên sách và tác giả, suy luận và mô tả chi tiết nội dung có thể có
+   - Nêu cụ thể các chủ đề chính mà sách có thể đề cập
+   - Phân tích giá trị, ý nghĩa và đóng góp của sách
+   - Kiến thức hoặc thông tin mà người đọc có thể thu được
+   - Đối tượng độc giả phù hợp và lý do nên đọc sách này
+   
+4. **PHONG CÁCH:**
+   - Viết CHI TIẾT, phong phú, đầy đủ thông tin
+   - Viết tự nhiên nhưng KHÔNG chung chung
+   - Tập trung vào thể loại "{categories}" và mở rộng nội dung
+   - Nếu là nhân vật lịch sử: viết chi tiết về cuộc đời, sự nghiệp, đóng góp
+   - Nếu là sách chuyên môn: viết về kiến thức, phương pháp, kỹ năng cụ thể
+   - Nếu là văn học: viết về chủ đề, nhân vật, ý nghĩa tác phẩm
+   - Sử dụng câu văn dài, đoạn văn phát triển tốt
+
+5. **ĐỊNH DẠNG:**
+   - Không dùng heading, không dùng markdown, không dùng dấu đầu dòng
+   - Viết thành nhiều đoạn văn liền mạch, mỗi đoạn phát triển một ý
+   - Bắt đầu: "Cuốn sách..." hoặc "Tác phẩm..."
+
+**VÍ DỤ CÁCH VIẾT ĐÚNG:**
+"Cuốn sách {title} của tác giả {authors} là một tác phẩm quan trọng..." (ĐÚNG)
+
+**VÍ DỤ MÔ TẢ DÀI (sách về nhân vật):**
+"Cuốn sách kể về cuộc đời và sự nghiệp lẫy lừng của [Tên], một nhân vật có vai trò then chốt trong lịch sử Việt Nam. Tác giả {authors}, với kinh nghiệm nghiên cứu sâu rộng trong lĩnh vực lịch sử, đã trình bày một cách sinh động và chi tiết về những sự kiện quan trọng, những quyết định lịch sử và những đóng góp to lớn mà [Tên] đã để lại cho dân tộc. Sách không chỉ tập trung vào các sự kiện chính trị mà còn đi sâu vào cuộc sống cá nhân, tư tưởng và di sản tinh thần của nhân vật. Đây là tài liệu quý giá cho những ai quan tâm đến lịch sử, văn hóa và các giá trị truyền thống Việt Nam."
+
+Hãy viết MÔ TẢ CHI TIẾT (TỐI THIỂU 500 KÝ TỰ) cho cuốn sách "{title}":
+"""
+
+
+def get_description_prompt_for_template_ai(book_title: str, book_authors: str, book_categories: str,
+                                           publisher: str, published_date: str, page_count: str,
+                                           existing_desc: str = "") -> str:
+    """
+    Prompt để AI tạo mô tả độc đáo trong trường hợp fallback (template AI).
+
+    Args:
+        book_title: Tên sách
+        book_authors: Tác giả
+        book_categories: Thể loại
+        publisher: Nhà xuất bản
+        published_date: Năm xuất bản
+        page_count: Số trang
+        existing_desc: Mô tả gốc (nếu có)
+
+    Returns:
+        Prompt string để gửi cho Gemini AI
+    """
+    desc_info = f"\n- Mô tả gốc: {existing_desc[:500]}" if existing_desc else ""
+
+    return f"""
+Bạn là chuyên gia viết giới thiệu sách chuyên nghiệp. Hãy viết MỘT MÔ TẢ ĐỘC ĐÁO VÀ RIÊNG BIỆT bằng TIẾNG VIỆT cho cuốn sách dưới đây.
+
+**THÔNG TIN SÁCH:**
+- Tên: {book_title}
+- Tác giả: {book_authors}
+- Thể loại: {book_categories}
+- Xuất bản: {publisher} ({published_date})
+- Số trang: {page_count}{desc_info}
+
+**YÊU CẦU QUAN TRỌNG:**
+1. **NGÔN NGỮ:** 
+   - Viết HOÀN TOÀN bằng TIẾNG VIỆT
+   - KHÔNG DỊCH: Tên sách ("{book_title}"), tên tác giả ("{book_authors}"), tên nhà xuất bản ("{publisher}")
+   - Giữ NGUYÊN tên riêng (tên người, tên địa danh, tên công ty)
+   - Dịch TẤT CẢ các từ khác sang tiếng Việt
+   
+2. **ĐỘC ĐÁO:** Mô tả phải RIÊNG BIỆT, phù hợp với nội dung CỤ THỂ của sách này
+
+3. **ĐỘ DÀI:** 400-600 ký tự (ngắn gọn nhưng đầy đủ thông tin)
+
+4. **NỘI DUNG:** 
+   - Giới thiệu chủ đề chính của sách một cách CỤ THỂ (không chung chung)
+   - Nêu rõ GIÁ TRỊ và ĐIỂM NỔI BẬT riêng của cuốn sách này
+   - Đối tượng độc giả phù hợp
+   - Tác giả và uy tín (nếu có thông tin)
+   
+5. **PHONG CÁCH:**
+   - Viết hấp dẫn, thu hút người đọc
+   - Tránh câu văn sáo rỗng, chung chung
+   - Tập trung vào đặc điểm RIÊNG của sách
+   - KHÔNG dùng template cố định
+   
+6. **ĐỊNH DẠNG:** Văn xuôi liền mạch, không dùng heading, bullet points
+
+**VÍ DỤ CÁCH VIẾT ĐÚNG:**
+"Cuốn sách {book_title} của {book_authors}..." (ĐÚNG - giữ nguyên tên)
+"Được {publisher} xuất bản..." (ĐÚNG - giữ nguyên tên nhà xuất bản)
+
+Hãy viết mô tả GỢI CẢM và ĐỘC ĐÁO để người đọc muốn tìm hiểu thêm về cuốn sách này!
+>>>>>>> Long
 """

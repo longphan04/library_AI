@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/docker/migration.sql" value="505091b2-664b-4977-ae8b-9030a4c35163" />
+  </component>
+</project>
