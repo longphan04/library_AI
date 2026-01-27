@@ -24,10 +24,11 @@ def main():
             "process",
             "index",
             "chat",
-            "sync-to-mysql",
+            "download-images",
+            "export-be",
             "api"
         ],
-        help="crawl | process | index | chat | sync-to-mysql | api"
+        help="crawl | process | index | chat | download-images | export-be | api"
     )
 
     args = parser.parse_args()
@@ -43,10 +44,15 @@ def main():
         indexer = Indexer()
         indexer.run_indexing()
 
-    elif args.command == "sync-to-mysql":
-        print(">>> SYNCING TO MYSQL")
-        from src.mysql.sync_data import sync_to_mysql
-        sync_to_mysql()
+    elif args.command == "download-images":
+        print(">>> DOWNLOADING IMAGES")
+        from src.download_images import download_images
+        download_images()
+    
+    elif args.command == "export-be":
+        print(">>> EXPORTING FOR BACKEND")
+        from src.export_for_be import export_for_be
+        export_for_be()
 
     elif args.command == "chat":
         chat_main()

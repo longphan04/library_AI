@@ -18,18 +18,50 @@ class Settings:
     
     # Cấu hình Crawler
     BATCH_SIZE = 40
-    BOOKS_PER_TOPIC = 1000
+    BOOKS_PER_TOPIC = 20  # Reduced for <500 total target
+    TOTAL_TARGET_BOOKS = 1000
     LIMIT_PER_MINUTE = 100
-    LIMIT_PER_DAY = 22000
+    LIMIT_PER_DAY = 10000  # Match target
 
-    # TOPICS để crawl
+    # TOPICS để crawl - Vietnamese Focus (Aligned with migration.sql categories)
     CRAWL_TOPICS = [
-    "Python Programming", "Artificial Intelligence", "Machine Learning", "Data Science", "Software Architecture", "Web Development", "Lịch sử Việt Nam",
-    "Kinh tế học", "Tâm lý học", "Tiểu thuyết trinh thám", "Khoa học vũ trụ", "Lịch sử thế giới", "Nhân học", "Giải toán", "Nghệ thuật hội họa",
-    "Nhiếp ảnh", "Quản trị kinh doanh", "Du lịch", "Tâm linh và Phật giáo", "Sức khỏe và Dinh dưỡng", "Văn học cổ điển", "Khám phá các nền văn hóa",
-    "Khoa học môi trường", "Lập trình di động", "Blockchain và Cryptocurrency", "An ninh mạng", "Kinh doanh quốc tế", "Tự lực và phát triển bản thân",
-    "Nhạc lý và âm nhạc cổ điển", "Lịch sử nghệ thuật", "Lập trình web front-end", "Lập trình web back-end"
-]
+        # === Công nghệ thông tin / Lập trình ===
+        "Lập trình Python",
+        "Khoa học máy tính",
+        "Công nghệ thông tin",
+        
+        # === Trí tuệ nhân tạo / Khoa học dữ liệu ===
+        "Trí tuệ nhân tạo",
+        "Machine Learning",
+        "Khoa học dữ liệu",
+        
+        # === An toàn thông tin / Mạng ===
+        "An toàn thông tin",
+        "Mạng máy tính",
+        
+        # === Toán - Lý - Hóa - Sinh ===
+        "Toán học",
+        "Vật lý",
+        
+        # === Kinh tế / Kinh doanh ===
+        "Kinh tế học",
+        "Quản trị kinh doanh",
+        "Marketing",
+        
+        # === Kỹ năng / Tâm lý ===
+        "Kỹ năng mềm",
+        "Tâm lý học",
+        "Phát triển bản thân",
+        
+        # === Văn học / Lịch sử Việt Nam ===
+        "Văn học Việt Nam",
+        "Nguyễn Nhật Ánh",
+        "Lịch sử Việt Nam",
+        
+        # === English (limited for quality technical books) ===
+        "Python Programming",
+        "Artificial Intelligence"
+    ]
     
     # MODEL EMBEDDING
     EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-base"
