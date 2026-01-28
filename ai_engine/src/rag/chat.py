@@ -1,4 +1,4 @@
-from .rag_engine_new import RAGEngine
+from .rag_engine import RAGEngine
 
 
 def main():
