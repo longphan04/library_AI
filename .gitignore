@@ -1,3 +1,6 @@
 /venv
 /ai_engine/data/export
 .env
+**/.env
+.env.*
+**/.env.*
