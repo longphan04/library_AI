@@ -84,7 +84,16 @@ class ModelManager:
                 err_str = str(e).lower()
                 logger.error(f"Generate Error (Key {self.current_key_idx} | Model {model}): {type(e).__name__} - {e}")
                 
-                is_rate_limit = "429" in err_str or "resource" in err_str or "exhausted" in err_str or "quota" in err_str
+                is_rate_limit = "429" in err_str or "resource" in err_str or "exhausted" in err_str or "quota" in err_str or "403" in err_str or "permission" in err_str
+                is_model_error = "404" in err_str or "not found" in err_str or "support" in err_str or "bad request" in err_str
+
+                if is_model_error:
+                    logger.warning(f"Model {model} error. Switching model immediately...")
+                    if self._switch_model():
+                        self.current_key_idx = 0 # Try new model with first key
+                        continue
+                    else:
+                        raise e # No more models
 
                 if is_rate_limit:
                     logger.warning(f"Rate limit hit on Key {self.current_key_idx} Model {model}. Rotating...")
