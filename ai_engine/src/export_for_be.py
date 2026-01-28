@@ -83,6 +83,37 @@ def validate_book(book):
         'title': title
     }
 
+# Category name to ID mapping
+# Must match EXACTLY with migration.sql category names (lines 643-670)
+CATEGORY_MAP = {
+    'Công nghệ thông tin': '1',
+    'Máy tính': '2',
+    'Trí tuệ và Dữ liệu': '3',
+    'Kỹ thuật': '4',
+    'Toán': '5',
+    'Vật lý': '6',
+    'Hóa học': '7',
+    'Sinh học': '8',
+    'Môi trường': '9',
+    'Kinh tế': '10',
+    'Kinh doanh': '11',
+    'Tài chính': '12',
+    'Marketing': '13',
+    'Khởi nghiệp': '14',
+    'Tâm lý': '15',
+    'Xã hội': '16',
+    'Lịch sử': '17',
+    'Giáo dục': '18',
+    'Ngoại ngữ': '19',
+    'Kỹ năng': '20',
+    'Văn học': '21',
+    'Khác': '22'
+}
+
+def map_category_to_id(category_name):
+    """Map category name to ID, return '22' (Khác) if not found"""
+    return CATEGORY_MAP.get(category_name.strip(), '22')
+
 def export_for_be():
     """Export books in BE-ready format"""
     print("="*60)
@@ -124,7 +155,7 @@ def export_for_be():
             "language": validated.get('language', 'en'),
             "cover_url": f"book/{validated['identifier']}.jpg" if validated.get('cover_url') else "",  # Empty if no image
             "publisher": validated.get('publisher', 'Unknown'),
-            "categories": [c.strip() for c in validated.get('category', 'Khác').split(',')],
+            "categories": [map_category_to_id(c.strip()) for c in validated.get('category', 'Khác').split(',')],
             "authors": [a.strip() for a in validated.get('authors', 'Unknown').split(',')],
             "shelf_code": "1A-01"  # Default, BE will reassign
         }

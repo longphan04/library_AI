@@ -128,6 +128,12 @@ class GoogleBooksCrawler:
             logger.info(f"Scanning Topic: '{topic}'...")
             self.stats["topics_scanned"].append(topic)
             
+            # Track topic metrics
+            topic_start = time.time()
+            topic_fetched = 0
+            topic_saved = 0
+            topic_errors = 0
+            
             for start_index in range(0, settings.BOOKS_PER_TOPIC, settings.BATCH_SIZE):
                 # 1. Fetch Data
                 batch = self.fetch_batch(topic, start_index)
@@ -139,9 +145,14 @@ class GoogleBooksCrawler:
                 # 3. Update Stats
                 count = len(batch)
                 self.stats["total_collected"] += count
+                topic_fetched += count
+                topic_saved += count  # Assume all saved successfully
                 # 4. Rate Limiting
                 time.sleep(2)
-            logger.info(f"Finished topic '{topic}'.")
+            
+            # Topic completed
+            topic_duration = time.time() - topic_start
+            logger.info(f"Finished topic '{topic}' ({topic_fetched} books in {topic_duration:.1f}s).")
         # Kết thúc session
         self.generate_report()
         logger.info(f"ALL DONE. Total books collected: {self.stats['total_collected']}")
