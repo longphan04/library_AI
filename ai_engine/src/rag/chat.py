@@ -1,27 +1,31 @@
-from .rag_engine import RAGEngine
+from .rag_engine_new import RAGEngine
 
 
 def main():
     """Main chat loop for CLI testing"""
-    
-    # Initialize RAG Engine
+
     rag = RAGEngine(top_k=5)
 
-    print("="*60)
+    print("=" * 60)
     print("AI Library RAG Chatbot")
-    print("="*60)
+    print("=" * 60)
     print("Gõ 'exit' để thoát\n")
 
-    # Hardcoded suggestions (don't rely on non-existent method)
-    suggestions = [
+    # Lấy gợi ý trực tiếp từ engine để khớp với logic intent mới
+    default_suggestions = [
         "Tìm sách về Python",
         "Sách Machine Learning hay nhất",
-        "Thư viện có bao nhiêu cuốn sách?",
+        "Thư viện có bao nhiêu cuốn sách",
         "Giờ mở cửa thư viện?",
-        "Quy định mượn sách như thế nào?"
+        "Quy định mượn sách như thế nào?",
     ]
 
-    # Show suggestions
+    try:
+        engine_suggestions = rag.get_suggested_questions()
+        suggestions = engine_suggestions if engine_suggestions else default_suggestions
+    except Exception:
+        suggestions = default_suggestions
+
     print("Gợi ý câu hỏi:")
     for i, q in enumerate(suggestions, start=1):
         print(f"  {i}. {q}")
@@ -41,6 +45,7 @@ def main():
             
         if question.lower() in ["exit", "quit", "q"]:
             print("Tạm biệt!")
+
             break
 
         # Check if user input is a number (selecting suggestion)
@@ -50,7 +55,7 @@ def main():
                 question = suggestions[idx]
                 print(f">> Bạn chọn: {question}")
             else:
-                print("Số không hợp lệ. Vui lòng chọn từ 1-{}.".format(len(suggestions)))
+                print(f"Số không hợp lệ. Vui lòng chọn từ 1-{len(suggestions)}.")
                 continue
 
         # Generate answer

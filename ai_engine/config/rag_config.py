@@ -28,11 +28,15 @@ GEMINI_API_KEYS = list(set([k for k in GEMINI_API_KEYS if k]))
 
 # Models to rotate through (fallback strategy)
 GEMINI_MODELS = [
-    "gemma-3-27b",
-    "gemini-2.0-flash-exp",
-    "gemini-1.5-flash", 
-    "gemini-1.5-pro"
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+    "gemini-1.0-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-pro",
+    "gemini-2.5-flash",
 ]
+
+
 GEMINI_MODEL = GEMINI_MODELS[0] # Default
 
 # Search Configuration

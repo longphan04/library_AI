@@ -11,6 +11,7 @@ Endpoints:
   POST   /ai/chat/suggest        -> return starter prompt suggestions for chat
   GET    /ai/chat/history/<sid>  -> load chat history for session
   DELETE /ai/chat/history/<sid>  -> clear chat history for session
+  POST   /ai/description         -> generate detailed book description
   POST   /ai/data/sync           -> trigger data sync/index when new books are added
 
 Notes:
@@ -38,8 +39,9 @@ from src.indexer import Indexer
 from src.crawler import GoogleBooksCrawler
 from src.data_processor import run_processor
 from src.search_engine import SearchEngine
-from src.rag.rag_engine import RAGEngine
+from src.rag.rag_engine_new import RAGEngine
 from src.database import get_db, DatabaseConnection
+from src.description import BookDescriptionGenerator
 
 
 def _normalize_filters(filters: Optional[Dict]) -> Optional[Dict]:
@@ -107,6 +109,7 @@ def factory_get_database() -> Any:
     """
     return get_db()
 
+
 # ---- App & logging ----
 app = Flask(__name__)
 if os.getenv("API_ENABLE_CORS", "true").lower() in ("1", "true", "yes"):
@@ -154,6 +157,14 @@ def get_rag_engine(top_k=5) -> Any:
         # Update top_k just in case
         _singletons["rag_engine"].top_k = top_k
         return _singletons["rag_engine"]
+
+def get_description_generator() -> Any:
+    """Return a BookDescriptionGenerator instance. Uses a singleton for the process."""
+    with _singletons_lock:
+        if "description_generator" not in _singletons:
+            logger.info("Initializing BookDescriptionGenerator (lazy)...")
+            _singletons["description_generator"] = BookDescriptionGenerator()
+        return _singletons["description_generator"]
 
 
 # ---- Job tracking for background tasks ----
@@ -285,8 +296,9 @@ def api_search():
     try:
         se = get_search_engine()
         results = se.search(query=query_text, filters=filters, top_k=top_k)
-        # Return the normalized filters in the response so clients see what was applied
-        return success({"query": query_text, "top_k": top_k, "filters": filters, "results": results})
+        # Return the actual count of books found instead of the requested top_k
+        actual_count = len(results) if results else 0
+        return success({"query": query_text, "top_k": actual_count, "filters": filters, "results": results})
     except Exception as e:
         logger.exception("Search failed for query=%s", query_text)
         return error(str(e), 500)
@@ -301,21 +313,21 @@ def api_recommend(identifier):
     try:
         # Convert identifier to string (Vector DB uses string IDs)
         identifier_str = str(identifier)
-        
+
         se = get_search_engine()
         top_k = int(request.args.get("top_k", 5))
-        
+
         # Recommend vẫn dùng internal book_id của Vector DB
         # Nếu cần lookup từ ISBN → book_id, implement sau
         recs = se.recommend(book_id=identifier_str, top_k=top_k)
-        
+
         if not recs:
             return success({
                 "identifier": identifier_str,
                 "recommendations": [],
                 "message": f"Book with identifier '{identifier_str}' not found or no similar books available"
             })
-        
+
         return success({"identifier": identifier_str, "recommendations": recs})
     except Exception as e:
         logger.exception("Recommend failed for %s", identifier)
@@ -400,38 +412,51 @@ def api_chat():
         return error("Missing 'message' in body", 400)
 
     session_id = (payload.get("session_id") or "").strip()
-    if not session_id:
+    if session_id:
+        # Validate session_id format
+        import re
+        if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', session_id):
+            return error("Invalid session_id format. Use only alphanumeric, dash, underscore (max 64 chars).", 400)
+    else:
         session_id = "s_" + uuid.uuid4().hex[:12]
 
+    # ===== 2. PARSE TOP_K =====
+    try:
+        top_k = int(payload.get("top_k", 5))
+        top_k = max(1, min(top_k, 20))  # Clamp between 1 and 20
+    except Exception:
+        top_k = 5
+
+    # ===== 3. PARSE & NORMALIZE FILTERS (CATEGORY TỪ FE) =====
+    filters = payload.get("filters")
+    filters = _normalize_filters(filters)
+
+    # Extract category from filters if provided by FE
+    category_filter = None
+    if filters and filters.get("category"):
+        category_filter = filters.get("category")
+        logger.info(f"Chat with category filter from FE: {category_filter}")
+
+    # ===== 4. LOAD/CREATE SESSION =====
     session = load_session(session_id)
     append_message(session, "user", message)
 
-    try:
-        top_k = int(payload.get("top_k", 5))
-    except Exception:
-        top_k = 5
-    filters = payload.get("filters")
-    # Normalize filter keys before forwarding to search
-    filters = _normalize_filters(filters)
-
-    # 1) Retrieve RAG Engine
+    # ===== 5. INITIALIZE RAG ENGINE =====
     try:
         rag = get_rag_engine(top_k=top_k)
     except Exception as e:
         return error(f"Failed to init RAG Engine: {e}", 500)
-
-    # 2) Generate Answer using Logic (Intent + Search + History)
+    # 2) Generate Answer using RAG Engine (handles intent + search + history)
     try:
-        result = rag.generate_answer(question=message, session_id=session_id)
-        answer = result["answer"]
-        intent = result.get("intent", "UNKNOWN")
-        # Only return sources for SEARCH intent, empty for others
-        results = result.get("sources", [])
-        logger.info(f"Chat response - Intent: {intent}, Sources count: {len(results)}")
-        
+        answer = rag.generate_answer(question=message, session_id=session_id)
+
+        # Get context sources from RAGEngine session
+        rag_session = rag.get_session(session_id)
+        results = rag_session.last_search_results if rag_session.last_search_results else []
+
     except Exception as e:
         logger.exception("RAG generation failed")
-        answer = "❌ Đã có lỗi xảy ra khi xử lý câu hỏi của bạn."
+        answer = "❌ Đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại sau."
         results = []
 
     append_message(session, "assistant", answer)
@@ -546,14 +571,86 @@ def job_detail(job_id: str):
     return success(job)
 
 
+@app.route("/ai/description", methods=["POST"])
+def api_description():
+    """
+    Generate detailed book description from title, authors, and category.
+
+    Request body (JSON):
+    {
+        "title": "Book Title",
+        "authors": "Author Name",
+        "category": "Category Name"
+    }
+
+    Response:
+    {
+        "status": "success",
+        "message": "ok",
+        "data": {
+            "title": "Book Title",
+            "authors": ["Author Name"],
+            "category": "Category",
+            "description": "Detailed description (min 2000 chars)",
+            "description_length": 2500,
+            "source": "google_books" or "template",
+            "book_info": {...}
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error("No JSON data provided", 400)
+
+        title = data.get("title", "").strip()
+        authors = data.get("authors", "").strip()
+        category = data.get("category", "").strip()
+
+        if not title:
+            return error("Title is required", 400)
+        if not authors:
+            return error("Authors is required", 400)
+        if not category:
+            return error("Category is required", 400)
+
+        logger.info(f"Generating description for: {title} by {authors} ({category})")
+
+        desc_gen = get_description_generator()
+        result = desc_gen.generate_description(
+            title=title,
+            authors=authors,
+            category=category
+        )
+
+        if result["status"] == "error":
+            return error(result["message"], 500)
+
+        # Chỉ trả về description và description_length
+        response_data = {
+            "description": result["data"]["description"],
+            "description_length": result["data"]["description_length"]
+        }
+
+        return success(response_data, message="Description generated successfully")
+
+    except Exception as e:
+        logger.exception("Description generation failed")
+        return error(f"Failed to generate description: {str(e)}", 500)
+
+
 # ---- Runner ----
-def run(host: str = "0.0.0.0", port: int = 9999, debug: bool = False):
-    logger.info("Starting API on %s:%s (debug=%s)", host, port, debug)
+def run(host: str = "0.0.0.0", port: int = 10000, debug: bool = False):
+    print(f">>> Starting server at http://{host}:{port}")
     app.run(host=host, port=port, debug=debug)
 
 
 if __name__ == "__main__":
-    host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "9999"))
+    host = "0.0.0.0"
+
+    # ⚠️ Render BẮT BUỘC dùng biến PORT
+    port = int(os.environ.get("PORT", 10000))
+
     debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+
     run(host=host, port=port, debug=debug)
