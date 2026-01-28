@@ -299,25 +299,25 @@ class RAGEngine:
 
         # Check and return hardcoded response
         if check_keywords(greetings):
-            return "Xin chao! Toi la tro ly thu vien AI. Toi co the giup ban tim sach, tra cuu thong tin thu vien. Ban can gi nao?"
+            return "Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp bạn tìm sách, tra cứu thông tin thư viện. Bạn cần gì nào?"
         
         if check_keywords(thanks):
-            return "Khong co gi! Neu ban can gi them, cu hoi nhe!"
+            return "Không có gì! Nếu bạn cần gì thêm, cứ hỏi nhé!"
         
         if check_keywords(goodbyes):
-            return "Tam biet! Hen gap lai ban!"
+            return "Tạm biệt! Hẹn gặp lại bạn!"
         
         if check_keywords(who_are_you):
-            return "Toi la Tro ly AI cua Thu vien. Toi co the giup ban tim sach, tra cuu gio mo cua, noi quy va cac thong tin khac ve thu vien."
+            return "Tôi là Trợ lý AI của Thư viện. Tôi có thể giúp bạn tìm sách, tra cứu giờ mở cửa, nội quy và các thông tin khác về thư viện."
         
         if check_keywords(how_are_you):
-            return "Toi van khoe! Cam on ban da hoi. Ban can tim sach gi hom nay?"
+            return "Tôi vẫn khỏe! Cảm ơn bạn đã hỏi. Bạn cần tìm sách gì hôm nay?"
         
         if check_keywords(helps):
-            return "Toi co the giup ban: Tim sach theo chu de, tac gia hoac the loai; Tra cuu gio mo cua thu vien; Xem noi quy va quy dinh muon sach. Ban muon lam gi?"
+            return "Tôi có thể giúp bạn: Tìm sách theo chủ đề, tác giả hoặc thể loại; Tra cứu giờ mở cửa thư viện; Xem nội quy và quy định mượn sách. Bạn muốn làm gì?"
         
         if check_keywords(oks):
-            return "Vang! Neu ban can gi them, cu hoi nhe!"
+            return "Vâng! Nếu bạn cần gì thêm, cứ hỏi nhé!"
 
         # Fallback to AI for complex/unknown smalltalk
         try:
@@ -327,7 +327,7 @@ class RAGEngine:
             )
             return self._call_gemini(prompt, temperature=0.7, max_tokens=150)
         except Exception:
-            return "Xin chao! Toi la tro ly thu vien AI. Toi co the giup gi cho ban?"
+            return "Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp gì cho bạn?"
 
     # ==================================================
     # BOOK RELATED CHECK (THÊM TỪ HEAD)
@@ -547,7 +547,7 @@ class RAGEngine:
             sources = []  # Only return sources for SEARCH intent
 
             if intent == "GARBAGE":
-                answer = "Cau hoi khong hop le hoac qua ngan."
+                answer = "Câu hỏi không hợp lệ hoặc quá ngắn."
 
             elif intent == "SMALLTALK":
                 answer = self.answer_smalltalk(question, session)
@@ -558,7 +558,7 @@ class RAGEngine:
 
             elif intent == "STATS":
                 total = self.vector_db.get_collection_stats().get("count", 0)
-                answer = f"Hien tai thu vien co **{total} cuon sach** trong he thong."
+                answer = f"Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
 
             elif intent == "LIBRARY_INFO":
                 answer = self._generate_library_info_answer(question, session)
@@ -578,7 +578,7 @@ class RAGEngine:
         except Exception as e:
             logger.error(f"Critical error in generate_answer: {str(e)}")
             return {
-                "answer": "Xin loi, he thong dang gap su co ky thuat. Vui long thu lai sau.",
+                "answer": "Xin lỗi, hệ thống đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.",
                 "intent": "ERROR",
                 "sources": []
             }
@@ -599,23 +599,23 @@ class RAGEngine:
 
         # Hardcoded responses - KHONG CAN GOI AI
         if any(k in ql for k in ["gio mo cua", "mo cua", "may gio"]):
-            return f"Thu vien mo cua: {LIBRARY_INFO['opening_hours']}. Ngoai gio nay thu vien dong cua."
+            return f"Thư viện mở cửa: {LIBRARY_INFO['opening_hours']}. Ngoài giờ này thư viện đóng cửa."
 
         if any(k in ql for k in ["noi quy", "quy dinh", "luat"]):
             rules = "\n".join([f"- {r}" for r in LIBRARY_INFO['library_rules']])
-            return f"Noi quy thu vien:\n{rules}"
+            return f"Nội quy thư viện:\n{rules}"
 
         if any(k in ql for k in ["muon sach", "muon", "borrow"]):
             bp = LIBRARY_INFO['borrow_policy']
-            return f"Quy dinh muon sach:\n- {bp['fee']}\n- {bp['duration']}\n- {bp['renew']}"
+            return f"Quy định mượn sách:\n- {bp['fee']}\n- {bp['duration']}\n- {bp['renew']}"
 
         if any(k in ql for k in ["tra sach", "tra", "return"]):
             pp = LIBRARY_INFO['penalty_policy']
-            return f"Quy dinh tra sach:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
+            return f"Quy định trả sách:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
 
         if any(k in ql for k in ["phi phat", "phat", "penalty"]):
             pp = LIBRARY_INFO['penalty_policy']
-            return f"Quy dinh phi phat:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
+            return f"Quy định phí phạt:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
 
         # Fallback to AI for complex library questions
         try:
@@ -623,7 +623,7 @@ class RAGEngine:
             prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books="(Khong ap dung)", **ctx)}"""
             return self._call_gemini(prompt)
         except Exception:
-            return f"Thu vien mo cua: {LIBRARY_INFO['opening_hours']}. Neu can thong tin cu the, vui long hoi lai."
+            return f"Thư viện mở cửa: {LIBRARY_INFO['opening_hours']}. Nếu cần thông tin cụ thể, vui lòng hỏi lại."
 
     def _perform_book_search(self, question: str, session: ChatSession, filters: dict = None) -> tuple:
         """
