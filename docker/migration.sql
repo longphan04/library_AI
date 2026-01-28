@@ -642,22 +642,29 @@ INSERT INTO shelves (code, name) VALUES
 
 INSERT INTO categories (name, image) VALUES
 ('Công nghệ thông tin', 'category/it.jpg'),
-('Khoa học máy tính', 'category/computer_science.jpg'),
-('Lập trình', 'category/programming.jpg'),
-('Trí tuệ nhân tạo', 'category/ai.jpg'),
-('Khoa học dữ liệu', 'category/data_science.jpg'),
-('Mạng máy tính', 'category/network.jpg'),
-('An toàn thông tin', 'category/cyber_security.jpg'),
-('Toán học', 'category/math.jpg'),
+('Máy tính', 'category/computer_science.jpg'),
+('Trí tuệ và Dữ liệu', 'category/ai_data.jpg'),
+('Kỹ thuật', 'category/engineering.jpg'),
+
+('Toán', 'category/math.jpg'),
 ('Vật lý', 'category/physics.jpg'),
 ('Hóa học', 'category/chemistry.jpg'),
 ('Sinh học', 'category/biology.jpg'),
+('Môi trường', 'category/environment.jpg'),
+
 ('Kinh tế', 'category/economics.jpg'),
-('Quản trị kinh doanh', 'category/business.jpg'),
+('Kinh doanh', 'category/business.jpg'),
+('Tài chính', 'category/finance.jpg'),
 ('Marketing', 'category/marketing.jpg'),
-('Tài chính - Ngân hàng', 'category/finance.jpg'),
-('Kỹ năng mềm', 'category/soft_skills.jpg'),
-('Tâm lý học', 'category/psychology.jpg'),
-('Văn học', 'category/literature.jpg'),
+('Khởi nghiệp', 'category/startup.jpg'),
+
+('Tâm lý', 'category/psychology.jpg'),
+('Xã hội', 'category/society.jpg'),
 ('Lịch sử', 'category/history.jpg'),
-('Ngoại ngữ', 'category/language.jpg');
+('Giáo dục', 'category/education.jpg'),
+
+('Ngoại ngữ', 'category/language.jpg'),
+('Kỹ năng', 'category/self_development.jpg'),
+
+('Văn học', 'category/literature.jpg'),
+('Khác', 'category/other.jpg');

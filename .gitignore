@@ -1,2 +1,3 @@
 /venv
 /ai_engine/data/export
+ai_engine/delete_from_vectordb.py

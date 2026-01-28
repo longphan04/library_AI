@@ -19,7 +19,7 @@ class DataProcessor:
         self.report_dir = settings.REPORT_DIR
         self.rich_text_dir = settings.DATA_RICH_TEXT_DIR
         
-        # Thống kê (Thêm dropped_font_error)
+        # Thống kê (Thêm dropped_font_error và dropped_no_thumbnail)
         self.stats = {
             "start_time": datetime.now(),
             "total_raw_items": 0,
@@ -29,10 +29,10 @@ class DataProcessor:
             "dropped_short_desc": 0,
             "dropped_bad_data": 0,
             "dropped_no_id": 0,
-            "dropped_font_error": 0  # <--- MỚI: Đếm số lượng lỗi font
+            "dropped_font_error": 0,
+            "dropped_no_thumbnail": 0
         }
 
-    # --- MỚI: Hàm kiểm tra lỗi font ---
     def has_font_errors(self, text):
         """
         Trả về True nếu phát hiện lỗi font/encoding nghiêm trọng
@@ -219,6 +219,12 @@ class DataProcessor:
         cover_url = image_links.get("thumbnail", "")  # Primary image (zoom=1)
         small_thumbnail = image_links.get("smallThumbnail", "")  # Smaller version (zoom=5)
         
+        # --- KIỂM TRA THUMBNAIL (Bỏ sách không có ảnh) ---
+        if not cover_url or not cover_url.strip():
+            self.stats["dropped_no_thumbnail"] += 1
+            return None
+        # ---------------------------------------------
+        
         # NOTE: Giữ nguyên full URL với &zoom=1, &edge=curl
         # Không remove parameters để đảm bảo link hoạt động lâu dài
         # Module tải ảnh về sau sẽ xử lý việc tải và lưu local
@@ -353,6 +359,7 @@ class DataProcessor:
             f"No Identifier       : {self.stats['dropped_no_id']:>5}\n"
             f"No Description      : {self.stats['dropped_no_desc']:>5}\n"
             f"Short Description   : {self.stats['dropped_short_desc']:>5}\n"
+            f"No Thumbnail        : {self.stats['dropped_no_thumbnail']:>5}\n"
             f"Bad Data (ID/Title) : {self.stats['dropped_bad_data']:>5}\n"
             f"========================================\n"
         )

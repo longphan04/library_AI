@@ -14,7 +14,19 @@ import os
 import re
 import json
 import logging
+import unicodedata
 from typing import List, Dict
+
+
+def remove_diacritics(text: str) -> str:
+    """
+    Remove Vietnamese diacritics from text.
+    Example: "xin chào" -> "xin chao"
+    """
+    # Normalize to NFD form (separates base char and diacritics)
+    nfkd_form = unicodedata.normalize('NFD', text)
+    # Remove combining diacritical marks
+    return ''.join(c for c in nfkd_form if not unicodedata.combining(c))
 
 from config.settings import settings
 from src.search_engine import SearchEngine
@@ -38,7 +50,7 @@ logger = logging.getLogger("RAGEngine")
 
 
 # =====================================================
-# 💬 PROMPT TEMPLATES (THÊM TỪ HEAD)
+# PROMPT TEMPLATES (THÊM TỪ HEAD)
 # =====================================================
 # Lý do: Các template này giúp Gemini trả lời thông minh hơn
 # cho các trường hợp smalltalk và câu hỏi tổng quát
@@ -166,7 +178,7 @@ class ChatSession:
 class RAGEngine:
     """
     ========================================================
-    🤖 RAGEngine (Merged Version)
+    RAGEngine (Merged Version)
     --------------------------------------------------------
     Chức năng:
     - Quản lý session chat (Persistent)
@@ -200,7 +212,7 @@ class RAGEngine:
         return self.sessions[session_id]
 
     # ==================================================
-    # 🆕 SMALLTALK DETECTION (THÊM TỪ HEAD)
+    # SMALLTALK DETECTION (THÊM TỪ HEAD)
     # ==================================================
     # Lý do thêm: Phiên bản HEAD có nhận diện smalltalk chi tiết hơn,
     # hỗ trợ cả tiếng Việt có dấu và không dấu, giúp bot phản hồi
@@ -208,39 +220,38 @@ class RAGEngine:
 
     def is_smalltalk(self, question: str) -> bool:
         """
-        Nhận diện câu hỏi smalltalk / chào hỏi.
-        Hỗ trợ cả tiếng Việt có dấu và không dấu.
+        Nhan dien cau hoi smalltalk / chao hoi.
+        Ho tro ca tieng Viet co dau va khong dau (normalize thanh khong dau).
         """
+        # Normalize: lowercase, remove punctuation, remove diacritics
         q = question.lower().strip()
         q = re.sub(r'[?.!,;:]', '', q)
+        q = remove_diacritics(q)  # Convert "xin chào" -> "xin chao"
 
         smalltalk_keywords = [
-            # Chào hỏi có dấu
-            "xin chào", "chào bạn", "chào", "chào buổi sáng", "chào buổi tối",
-            # Chào hỏi không dấu
+            # Chao hoi
             "xin chao", "chao ban", "chao", "chao buoi sang", "chao buoi toi",
-            # Tiếng Anh
+            "chao buoi trua", "chao buoi chieu",
+            # Tieng Anh
             "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
-            # Cảm ơn có dấu
-            "cảm ơn", "cám ơn", "cảm ơn bạn", "cám ơn bạn",
-            # Cảm ơn không dấu
-            "cam on", "cam on ban",
-            # Tiếng Anh
+            # Cam on
+            "cam on", "cam on ban", "cam on nhieu",
+            # Tieng Anh
             "thank", "thanks", "thank you", "tks", "ty",
-            # Tạm biệt có dấu
-            "tạm biệt", "hẹn gặp lại", "gặp lại sau",
-            # Tạm biệt không dấu
-            "tam biet", "hen gap lai", "gap lai sau",
-            # Tiếng Anh
+            # Tam biet
+            "tam biet", "hen gap lai", "gap lai sau", "bye bye",
+            # Tieng Anh
             "bye", "goodbye", "see you", "see ya",
-            # Hỏi thăm có dấu
-            "bạn là ai", "tên gì", "khỏe không", "bạn ổn không", "bạn có khỏe không",
-            # Hỏi thăm không dấu
+            # Hoi tham
             "ban la ai", "ten gi", "khoe khong", "ban on khong", "ban co khoe khong",
-            # Hỏi thăm tiếng Anh
+            # Tieng Anh
             "how are you", "what's up", "who are you", "what is your name",
-            # Các câu đơn giản
-            "alo", "yo", "hii", "hiii", "helloo", "helo"
+            # Cac cau don gian
+            "alo", "yo", "hii", "hiii", "helloo", "helo",
+            # Xin loi / OK
+            "xin loi", "sorry", "ok", "okay", "duoc", "duoc roi", "dc", "dk",
+            # Giup do
+            "giup toi", "giup minh", "help", "help me", "ho tro"
         ]
 
         if q in smalltalk_keywords:
@@ -259,7 +270,7 @@ class RAGEngine:
         return self._call_gemini(prompt, temperature=0.7, max_tokens=150)
 
     # ==================================================
-    # 🆕 BOOK RELATED CHECK (THÊM TỪ HEAD)
+    # BOOK RELATED CHECK (THÊM TỪ HEAD)
     # ==================================================
     # Lý do thêm: Giúp skip cache sách khi user hỏi câu không liên quan sách
     # Ví dụ: "xin chào" không nên hit cache có danh sách sách
@@ -298,12 +309,13 @@ class RAGEngine:
     # ==================================================
     def classify_intent(self, query: str, session: ChatSession) -> str:
         q = query.strip().lower()
+        q_normalized = remove_diacritics(q)  # Normalize for keyword matching
 
         # 1. Garbage check
         if len(q) < 2 or not re.search(r"[a-zA-Z\u00c0-\u1ef90-9]", q):
             return "GARBAGE"
 
-        # 1b. Library stats check (NEW): ưu tiên cao, tránh bị search sách
+        # 1b. Library stats check: uu tien cao
         if self.is_library_stats_query(query):
             return "STATS"
 
@@ -311,47 +323,54 @@ class RAGEngine:
         if self.is_smalltalk(query):
             return "SMALLTALK"
 
-        # 3. Follow-up check
+        # 3. Library info check
+        if self.is_library_info_query(query):
+            return "LIBRARY_INFO"
+
+        # 4. Follow-up check
         if session.last_search_results:
             followup_keywords = [
-                "cuốn này", "cuốn đó", "cuốn thứ", "sách này", "sách đó",
-                "chi tiết", "nó nói về", "tác giả là ai", "giá bao nhiêu",
-                "trong số", "cuốn nào", "cái nào", "dễ học", "tốt nhất",
-                "phù hợp", "nên chọn", "ở trên", "vừa rồi", "trong danh sách"
+                "cuon nay", "cuon do", "cuon thu", "sach nay", "sach do",
+                "chi tiet", "no noi ve", "tac gia la ai", "gia bao nhieu",
+                "trong so", "cuon nao", "cai nao", "de hoc", "tot nhat",
+                "phu hop", "nen chon", "o tren", "vua roi", "trong danh sach",
+                "hay nhat", "hay hon", "tot hon", "noi ve gi", "ve cai gi",
+                "cua ai", "ai viet", "nam nao", "xuat ban nam", "may trang",
+                "nen doc", "doc truoc", "doc sau", "cuon dau", "cuon cuoi"
             ]
-            if any(k in q for k in followup_keywords):
+            if any(k in q_normalized for k in followup_keywords):
                 return "FOLLOWUP"
-            if re.search(r"(cuốn|số|quyển)\s*\d+", q):
+            if re.search(r"(cuon|so|quyen)\s*\d+", q_normalized):
                 return "FOLLOWUP"
 
-        # 4. Default
+        # 5. Default
         return "SEARCH"
 
     def is_library_stats_query(self, q: str) -> bool:
-        ql = q.lower()
-        # Bổ sung thêm mẫu hỏi phổ biến
-        return any(k in ql for k in [
-            "bao nhiêu cuốn sách",
-            "bao nhiêu quyển sách",
-            "bao nhiêu sách",
-            "tổng số sách",
-            "số lượng sách",
-            "thư viện có bao nhiêu",
-            "hiện có bao nhiêu",
-        ])
+        ql = remove_diacritics(q.lower())
+        keywords = [
+            "bao nhieu cuon sach",
+            "bao nhieu quyen sach",
+            "bao nhieu sach",
+            "tong so sach",
+            "so luong sach",
+            "thu vien co bao nhieu",
+            "hien co bao nhieu",
+        ]
+        return any(k in ql for k in keywords)
 
     def _normalize_book_query(self, question: str) -> str:
-        """Chuẩn hoá một số câu gợi ý để search trúng chủ đề hơn."""
+        """Chuan hoa mot so cau goi y de search trung chu de hon."""
         q = question.strip()
-        ql = q.lower()
+        ql = remove_diacritics(q.lower())
 
-        # Nếu user hỏi kiểu: "Sách Machine Learning hay nhất" → thêm từ khoá 'sách'
-        if "machine learning" in ql and "sách" in ql:
-            return "sách machine learning"
+        # Neu user hoi kieu: "Sach Machine Learning hay nhat"
+        if "machine learning" in ql and "sach" in ql:
+            return "sach machine learning"
 
-        # "Tìm sách về Python" hay "sách python" → chuẩn hoá
-        if "python" in ql and ("tìm" in ql or "sách" in ql):
-            return "sách python"
+        # "Tim sach ve Python" hay "sach python"
+        if "python" in ql and ("tim" in ql or "sach" in ql):
+            return "sach python"
 
         return q
 
@@ -359,7 +378,7 @@ class RAGEngine:
     # HANDLERS
     # ==================================================
     def answer_greeting(self) -> str:
-        return "👋 Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp gì cho bạn hôm nay? (Tìm sách, hỏi nội quy, v.v...)"
+        return "Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp gì cho bạn hôm nay? (Tìm sách, hỏi nội quy, v.v...)"
 
     def answer_followup(self, question: str, session: ChatSession) -> str:
         """Trả lời follow-up dựa trên last_search_results của session"""
@@ -402,11 +421,11 @@ class RAGEngine:
         if 0 <= idx < len(session.last_search_results):
             b = session.last_search_results[idx]
             return (
-                f"📘 **{b['title']}**\n"
+                f"**{b['title']}**\n"
                 f"- Tác giả: {b['authors']}\n"
                 f"- Năm xuất bản: {b['publish_year']}\n"
                 f"- Mã sách: {b['identifier']}\n\n"
-                f"📝 **Nội dung:**\n{b.get('richtext','')[:1000]}..."
+                f"**Nội dung:**\n{b.get('richtext','')[:1000]}..."
             )
 
         # 4. THÊM: Dùng LLM để trả lời follow-up phức tạp (từ HEAD)
@@ -442,7 +461,7 @@ class RAGEngine:
     # ==================================================
     # MAIN GENERATE FUNCTION (CẢI TIẾN)
     # ==================================================
-    def generate_answer(self, question: str, session_id: str = "default", filters: dict = None) -> str:
+    def generate_answer(self, question: str, session_id: str = "default", filters: dict = None) -> Dict:
         """
         Generate answer for a chat question.
 
@@ -452,7 +471,10 @@ class RAGEngine:
             filters: Optional filters from FE (category, authors, year, etc.)
 
         Returns:
-            AI-generated answer string
+            Dict with:
+                - answer: str - AI-generated answer
+                - intent: str - Detected intent (SEARCH, SMALLTALK, FOLLOWUP, etc.)
+                - sources: List[Dict] - Book results (only for SEARCH intent, empty for others)
         """
         session = self.get_session(session_id)
         session.add_message("user", question)
@@ -461,43 +483,56 @@ class RAGEngine:
         logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question} | Filters: {filters}")
 
         answer = ""
+        sources = []  # Only return sources for SEARCH intent
 
         if intent == "GARBAGE":
-            answer = "❌ Câu hỏi không hợp lệ hoặc quá ngắn."
+            answer = "Cau hoi khong hop le hoac qua ngan."
 
         elif intent == "SMALLTALK":
             answer = self.answer_smalltalk(question, session)
 
         elif intent == "FOLLOWUP":
             answer = self.answer_followup(question, session)
+            # Follow-up: don't return sources, info is from session internally
 
         elif intent == "STATS":
             total = self.vector_db.get_collection_stats().get("count", 0)
-            answer = f"📚 Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
+            answer = f"Hien tai thu vien co **{total} cuon sach** trong he thong."
+
+        elif intent == "LIBRARY_INFO":
+            answer = self._generate_library_info_answer(question, session)
 
         else:  # SEARCH
-            if self.is_library_info_query(question):
-                answer = self._generate_library_info_answer(question, session)
-            else:
-                # Normalize topic queries và truyền filters từ FE
-                normalized_query = self._normalize_book_query(question)
-                answer = self._perform_book_search(normalized_query, session, filters=filters)
+            # Normalize topic queries va truyen filters tu FE
+            normalized_query = self._normalize_book_query(question)
+            answer, sources = self._perform_book_search(normalized_query, session, filters=filters)
 
         session.add_message("model", answer)
-        return answer
+        
+        return {
+            "answer": answer,
+            "intent": intent,
+            "sources": sources
+        }
 
     # ==================================================
     # SUB-HANDLERS
     # ==================================================
     def is_library_info_query(self, q: str) -> bool:
-        return any(k in q.lower() for k in ["mở cửa", "quy định", "mượn sách", "trả sách", "phí phạt"])
+        ql = remove_diacritics(q.lower())
+        keywords = ["mo cua", "quy dinh", "muon sach", "tra sach", "phi phat", "noi quy", "gio mo cua"]
+        return any(k in ql for k in keywords)
 
     def _generate_library_info_answer(self, question: str, session: ChatSession) -> str:
         ctx = self._build_library_context()
         prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books="(Không áp dụng)", **ctx)}"""
         return self._call_gemini(prompt)
 
-    def _perform_book_search(self, question: str, session: ChatSession, filters: dict = None) -> str:
+    def _perform_book_search(self, question: str, session: ChatSession, filters: dict = None) -> tuple:
+        """
+        Perform book search and return (answer, sources).
+        Returns: (answer: str, sources: List[Dict])
+        """
         q_vec = self.embedder.embed_text(question, is_query=True)
 
         # THÊM: Smart cache skip (từ HEAD)
@@ -506,24 +541,26 @@ class RAGEngine:
             cached = self.vector_db.search_query_memory(q_vec, threshold=QUERY_CACHE_THRESHOLD)
             if cached:
                 # Skip cache nếu cache là sách nhưng query không liên quan sách
-                is_book_cache = "📚" in cached or "Danh sách sách" in cached
+                is_book_cache = "Danh sách sách" in cached
                 if is_book_cache and not self._is_book_related_query(question):
-                    logger.info("⚠️ Query memory SKIP (cached books for non-book query)")
+                    logger.info("Query memory SKIP (cached books for non-book query)")
                 else:
-                    logger.info("⚡ Query memory HIT")
-                    return f"⚡ {cached}"
+                    logger.info("Query memory HIT")
+                    # Cached response: return answer but no sources
+                    return f"(Cache) {cached}", []
 
         # Search với filters nếu được cung cấp
         raw_docs = self.search_engine.search(query=question, filters=filters, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
         if not raw_docs:
-            return self._gemini_fallback(question, session)
+            return self._gemini_fallback(question, session), []
 
         best_score = max(d.get("score", 0) for d in raw_docs)
         if best_score < SCORE_THRESHOLD:
-            return self._gemini_fallback(question, session)
+            return self._gemini_fallback(question, session), []
 
         docs = raw_docs[:self.top_k]
 
+        # Save to session for follow-up questions
         session.last_search_results = docs
         session.save()
 
@@ -534,20 +571,20 @@ class RAGEngine:
         books_text = "\n".join(book_lines)
 
         if not self.needs_synthesis(question):
-            answer = f"📚 Danh sách sách liên quan:\n\n{books_text}"
+            answer = f"Danh sách sách liên quan:\n\n{books_text}"
             if q_vec:
                 self.vector_db.add_query_memory(question, q_vec, answer, qtype="rag_list")
-            return answer
+            return answer, docs
 
         ctx = self._build_library_context()
         prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books=books_text, **ctx)}"""
 
         synthesis = self._call_gemini(prompt)
-        answer = f"📚 Danh sách sách liên quan:\n\n{books_text}\n\n📝 Tổng hợp:\n{synthesis}"
+        answer = f"Danh sách sách liên quan:\n\n{books_text}\n\nTổng hợp:\n{synthesis}"
 
         if q_vec:
             self.vector_db.add_query_memory(question, q_vec, answer, qtype="rag_synthesis")
-        return answer
+        return answer, docs
 
     def _gemini_fallback(self, question: str, session: ChatSession) -> str:
         """THÊM: Dùng GENERAL_QA_PROMPT_TEMPLATE để trả lời thông minh hơn (từ HEAD)"""
@@ -565,13 +602,13 @@ class RAGEngine:
                 temperature=temperature or TEMPERATURE,
                 max_tokens=max_tokens or MAX_OUTPUT_TOKENS
             )
-            return result if result else "❌ Xin lỗi, không có phản hồi."
+            return result if result else "Xin lỗi, không có phản hồi."
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
-            return "❌ Hệ thống đang bận hoặc gặp sự cố kết nối."
+            return "Hệ thống đang bận hoặc gặp sự cố kết nối."
 
     # ==================================================
-    # 🆕 SUGGESTED QUESTIONS (THÊM TỪ HEAD)
+    # SUGGESTED QUESTIONS (THÊM TỪ HEAD)
     # ==================================================
     def get_suggested_questions(self) -> List[str]:
         """Danh sách gợi ý mặc định cho giao diện chat"""

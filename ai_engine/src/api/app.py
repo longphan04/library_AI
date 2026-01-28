@@ -448,15 +448,16 @@ def api_chat():
         return error(f"Failed to init RAG Engine: {e}", 500)
     # 2) Generate Answer using RAG Engine (handles intent + search + history)
     try:
-        answer = rag.generate_answer(question=message, session_id=session_id)
-
-        # Get context sources from RAGEngine session
-        rag_session = rag.get_session(session_id)
-        results = rag_session.last_search_results if rag_session.last_search_results else []
+        result = rag.generate_answer(question=message, session_id=session_id, filters=filters)
+        answer = result["answer"]
+        intent = result.get("intent", "UNKNOWN")
+        # Only return sources for SEARCH intent, empty for others
+        results = result.get("sources", [])
+        logger.info(f"Chat response - Intent: {intent}, Sources count: {len(results)}")
 
     except Exception as e:
         logger.exception("RAG generation failed")
-        answer = "❌ Đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại sau."
+        answer = "Đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại sau."
         results = []
 
     append_message(session, "assistant", answer)
@@ -648,7 +649,7 @@ def run(host: str = "0.0.0.0", port: int = 10000, debug: bool = False):
 if __name__ == "__main__":
     host = "0.0.0.0"
 
-    # ⚠️ Render BẮT BUỘC dùng biến PORT
+    # Render BẮT BUỘC dùng biến PORT
     port = int(os.environ.get("PORT", 10000))
 
     debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
