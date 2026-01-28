@@ -213,7 +213,16 @@ class RAGEngine:
     # ==================================================
     # MAIN GENERATE FUNCTION
     # ==================================================
-    def generate_answer(self, question: str, session_id: str = "default") -> str:
+    def generate_answer(self, question: str, session_id: str = "default") -> Dict:
+        """
+        Generate answer for a question.
+        
+        Returns: {
+            "answer": str,
+            "intent": str,  # GREETING, SEARCH, FOLLOWUP, LIBRARY_INFO, etc.
+            "sources": List[Dict]  # Only populated for SEARCH, empty for others
+        }
+        """
         session = self.get_session(session_id)
         session.add_message("user", question)
 
@@ -221,12 +230,15 @@ class RAGEngine:
         logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question}")
 
         answer = ""
+        sources = []  # Only return sources for SEARCH intent
+        
         if intent == "GARBAGE":
             answer = "❌ Câu hỏi không hợp lệ hoặc quá ngắn."
         elif intent == "GREETING":
             answer = self.answer_greeting()
         elif intent == "FOLLOWUP":
             answer = self.answer_followup(question, session)
+            # Follow-up: don't return sources, user is asking about previous results
         else: 
             if self.is_library_stats_query(question):
                 total = self.vector_db.get_collection_stats().get("count", 0)
@@ -234,10 +246,16 @@ class RAGEngine:
             elif self.is_library_info_query(question):
                 answer = self._generate_library_info_answer(question)
             else:
-                answer = self._perform_book_search(question, session)
+                # SEARCH: return answer and sources
+                answer, sources = self._perform_book_search(question, session)
 
         session.add_message("model", answer)
-        return answer
+        
+        return {
+            "answer": answer,
+            "intent": intent,
+            "sources": sources
+        }
 
     # ==================================================
     # SUB-HANDLERS
@@ -253,22 +271,30 @@ class RAGEngine:
         prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books="(Không áp dụng)", **ctx)}"""
         return self._call_gemini(prompt)
 
-    def _perform_book_search(self, question: str, session: ChatSession) -> str:
+    def _perform_book_search(self, question: str, session: ChatSession) -> tuple:
+        """
+        Perform book search and return (answer, sources).
+        Returns: (answer: str, sources: List[Dict])
+        """
         q_vec = self.embedder.embed_text(question, is_query=True)
         if q_vec:
             cached = self.vector_db.search_query_memory(q_vec, threshold=QUERY_CACHE_THRESHOLD)
             if cached:
                 logger.info("⚡ Query memory HIT")
-                return f"⚡ {cached}"
+                # Cached response: return answer but no sources (can't reconstruct)
+                return f"⚡ {cached}", []
 
         raw_docs = self.search_engine.search(query=question, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
-        if not raw_docs: return self._gemini_fallback(question)
+        if not raw_docs: 
+            return self._gemini_fallback(question), []
              
         best_score = max(d.get("score", 0) for d in raw_docs)
-        if best_score < SCORE_THRESHOLD: return self._gemini_fallback(question)
+        if best_score < SCORE_THRESHOLD: 
+            return self._gemini_fallback(question), []
 
         docs = raw_docs[:self.top_k]
         
+        # Save to session for follow-up questions
         session.last_search_results = docs
         session.save()
 
@@ -281,7 +307,7 @@ class RAGEngine:
         if not self.needs_synthesis(question):
             answer = f"📚 Danh sách sách liên quan:\n\n{books_text}"
             if q_vec: self.vector_db.add_query_memory(question, q_vec, answer, qtype="rag_list")
-            return answer
+            return answer, docs
 
         ctx = self._build_library_context()
         prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books=books_text, **ctx)}"""
@@ -290,7 +316,7 @@ class RAGEngine:
         answer = f"📚 Danh sách sách liên quan:\n\n{books_text}\n\n📝 Tổng hợp:\n{synthesis}"
         
         if q_vec: self.vector_db.add_query_memory(question, q_vec, answer, qtype="rag_synthesis")
-        return answer
+        return answer, docs
 
     def _gemini_fallback(self, question: str) -> str:
         prompt = f"""Bạn là trợ lý thư viện AI. Thư viện KHÔNG có dữ liệu cho câu hỏi: "{question}". Yêu cầu: Nói rõ không có dữ liệu, KHÔNG bịa tên sách."""

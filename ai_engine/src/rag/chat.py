@@ -60,7 +60,8 @@ def main():
                 import uuid
                 main.session_id = str(uuid.uuid4())
                 
-            answer = rag.generate_answer(question, session_id=main.session_id)
+            result = rag.generate_answer(question, session_id=main.session_id)
+            answer = result["answer"]
             print("\nBot:")
             print(answer)
         except Exception as e:

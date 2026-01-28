@@ -422,11 +422,12 @@ def api_chat():
 
     # 2) Generate Answer using Logic (Intent + Search + History)
     try:
-        answer = rag.generate_answer(question=message, session_id=session_id)
-        
-        # Get context sources from RAGEngine session
-        rag_session = rag.get_session(session_id)
-        results = rag_session.last_search_results
+        result = rag.generate_answer(question=message, session_id=session_id)
+        answer = result["answer"]
+        intent = result.get("intent", "UNKNOWN")
+        # Only return sources for SEARCH intent, empty for others
+        results = result.get("sources", [])
+        logger.info(f"Chat response - Intent: {intent}, Sources count: {len(results)}")
         
     except Exception as e:
         logger.exception("RAG generation failed")
