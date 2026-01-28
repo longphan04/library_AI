@@ -442,12 +442,23 @@ class RAGEngine:
     # ==================================================
     # MAIN GENERATE FUNCTION (CẢI TIẾN)
     # ==================================================
-    def generate_answer(self, question: str, session_id: str = "default") -> str:
+    def generate_answer(self, question: str, session_id: str = "default", filters: dict = None) -> str:
+        """
+        Generate answer for a chat question.
+
+        Args:
+            question: User's question
+            session_id: Session identifier for conversation context
+            filters: Optional filters from FE (category, authors, year, etc.)
+
+        Returns:
+            AI-generated answer string
+        """
         session = self.get_session(session_id)
         session.add_message("user", question)
 
         intent = self.classify_intent(question, session)
-        logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question}")
+        logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question} | Filters: {filters}")
 
         answer = ""
 
@@ -468,8 +479,9 @@ class RAGEngine:
             if self.is_library_info_query(question):
                 answer = self._generate_library_info_answer(question, session)
             else:
-                # Normalize topic queries (đặc biệt hữu ích cho câu gợi ý)
-                answer = self._perform_book_search(self._normalize_book_query(question), session)
+                # Normalize topic queries và truyền filters từ FE
+                normalized_query = self._normalize_book_query(question)
+                answer = self._perform_book_search(normalized_query, session, filters=filters)
 
         session.add_message("model", answer)
         return answer
@@ -485,11 +497,12 @@ class RAGEngine:
         prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books="(Không áp dụng)", **ctx)}"""
         return self._call_gemini(prompt)
 
-    def _perform_book_search(self, question: str, session: ChatSession) -> str:
+    def _perform_book_search(self, question: str, session: ChatSession, filters: dict = None) -> str:
         q_vec = self.embedder.embed_text(question, is_query=True)
 
         # THÊM: Smart cache skip (từ HEAD)
-        if q_vec:
+        # Skip cache nếu có filters (để đảm bảo kết quả chính xác)
+        if q_vec and not filters:
             cached = self.vector_db.search_query_memory(q_vec, threshold=QUERY_CACHE_THRESHOLD)
             if cached:
                 # Skip cache nếu cache là sách nhưng query không liên quan sách
@@ -500,7 +513,8 @@ class RAGEngine:
                     logger.info("⚡ Query memory HIT")
                     return f"⚡ {cached}"
 
-        raw_docs = self.search_engine.search(query=question, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
+        # Search với filters nếu được cung cấp
+        raw_docs = self.search_engine.search(query=question, filters=filters, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
         if not raw_docs:
             return self._gemini_fallback(question, session)
 
