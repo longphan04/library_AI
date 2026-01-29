@@ -271,6 +271,11 @@ class MetricsVisualizer:
             else:
                 language_count['Khác'] += 1
         
+        # Trừ 1 cho mỗi loại ngôn ngữ theo yêu cầu
+        for lang in language_count:
+            if language_count[lang] > 0:
+                language_count[lang] -= 1
+        
         # Language Distribution PIE CHART with counts
         lang_labels_with_counts = []
         lang_values = []

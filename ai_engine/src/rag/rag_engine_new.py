@@ -666,31 +666,97 @@ class RAGEngine:
         
         # 2. DEFINED MAPPINGS (Synonyms)
         # Map short/common terms to EXACT category names in DB
-        # Based on final_categories.md: "Toán", "Kinh tế", "Văn học", "Máy tính", etc.
+        # Dựa trên 15 thể loại thực tế trong DB (xem all_categories_analysis_20260127_161608.png):
+        # Máy tính (91), CNTT (70), Kỹ năng (66), Kỹ thuật (59), Tài chính (54),
+        # Khởi nghiệp (50), Kinh doanh (31), Kinh tế (30), Trí tuệ và Dữ liệu (21),
+        # Văn học (12), Xã hội (9), Giáo dục (4), Khác (2), Lịch sử (2), Toán (1)
         category_map = {
-            "python": "Máy tính", # Or "Lập trình" if exists? Let's check logic. Actually DB likely has "Máy tính" or "Công nghệ thông tin"
+            # === MÁY TÍNH (91 sách) ===
+            "python": "Máy tính",
+            "java": "Máy tính",
+            "javascript": "Máy tính",
+            "lap trinh": "Máy tính",
+            "may tinh": "Máy tính",
+            "software": "Máy tính",
+            "phan mem": "Máy tính",
+            
+            # === CÔNG NGHỆ THÔNG TIN (70 sách) ===
             "cntt": "Công nghệ thông tin",
             "it": "Công nghệ thông tin",
+            "cong nghe thong tin": "Công nghệ thông tin",
+            "mang": "Công nghệ thông tin",
+            "bao mat": "Công nghệ thông tin",
+            
+            # === KỸ NĂNG (66 sách) ===
+            "ky nang": "Kỹ năng",
+            "ky nang song": "Kỹ năng",
+            "ky nang mem": "Kỹ năng",
+            "phat trien ban than": "Kỹ năng",
+            "giao tiep": "Kỹ năng",
+            "lanh dao": "Kỹ năng",
+            
+            # === KỸ THUẬT (59 sách) ===
+            "ky thuat": "Kỹ thuật",
+            "co khi": "Kỹ thuật",
+            "dien tu": "Kỹ thuật",
+            "xay dung": "Kỹ thuật",
+            
+            # === TÀI CHÍNH (54 sách) ===
+            "tai chinh": "Tài chính",
+            "ke toan": "Tài chính",
+            "ngan hang": "Tài chính",
+            "dau tu": "Tài chính",
+            "chung khoan": "Tài chính",
+            
+            # === KHỞI NGHIỆP (50 sách) ===
+            "khoi nghiep": "Khởi nghiệp",
+            "startup": "Khởi nghiệp",
+            "doanh nhan": "Khởi nghiệp",
+            
+            # === KINH DOANH (31 sách) ===
+            "kinh doanh": "Kinh doanh",
+            "quan tri": "Kinh doanh",
+            "quan ly": "Kinh doanh",
+            "business": "Kinh doanh",
+            
+            # === KINH TẾ (30 sách) ===
+            "kinh te": "Kinh tế",
+            "kinh te hoc": "Kinh tế",
+            "economics": "Kinh tế",
+            
+            # === TRÍ TUỆ VÀ DỮ LIỆU (21 sách) ===
             "ai": "Trí tuệ và Dữ liệu",
             "tri tue nhan tao": "Trí tuệ và Dữ liệu",
             "machine learning": "Trí tuệ và Dữ liệu",
             "hoc may": "Trí tuệ và Dữ liệu",
             "data science": "Trí tuệ và Dữ liệu",
             "khoa hoc du lieu": "Trí tuệ và Dữ liệu",
-            "toan": "Toán",
-            "toan hoc": "Toán",
-            "ly": "Vật lý",
-            "vat ly": "Vật lý",
-            "hoa": "Hóa học",
-            "hoa hoc": "Hóa học",
+            "big data": "Trí tuệ và Dữ liệu",
+            
+            # === VĂN HỌC (12 sách) ===
             "van": "Văn học",
             "van hoc": "Văn học",
-            "kinh te": "Kinh tế",
-            "kinh te hoc": "Kinh tế",
-            "marketing": "Marketing",
-            "ky nang": "Kỹ năng",
-            "tam ly": "Tâm lý",
-            "tam ly hoc": "Tâm lý"
+            
+            # === XÃ HỘI (9 sách) ===
+            "xa hoi": "Xã hội",
+            "tam ly": "Xã hội",  # Tâm lý → map vào Xã hội (không có category riêng)
+            "tam ly hoc": "Xã hội",
+            
+            # === GIÁO DỤC (4 sách) ===
+            "giao duc": "Giáo dục",
+            "su pham": "Giáo dục",
+            "hoc tap": "Giáo dục",
+            
+            # === LỊCH SỬ (2 sách) ===
+            "lich su": "Lịch sử",
+            "su": "Lịch sử",
+            
+            # === TOÁN (1 sách) ===
+            "toan": "Toán",
+            "toan hoc": "Toán",
+            
+            # === MARKETING (thuộc Kinh doanh?) ===
+            "marketing": "Kinh doanh",
         }
 
         # 3. REGEX EXTRACTION (Explicit Intent)
@@ -774,37 +840,61 @@ class RAGEngine:
                         break
             if "authors" in extracted: break
 
-        # 3c. Try extracting Category via Regex or Map
-        # First check synonyms map
+        # 3c. Try extracting Category via Map ONLY (STRICT MODE)
+        # Only use explicit category_map - NO fuzzy matching to avoid false positives
         for key, full_cat in category_map.items():
             # Fix: Use word boundary to avoid partial match (e.g. "hoa" in "khoa hoc")
             if re.search(r'\b' + re.escape(key) + r'\b', q_norm):
                 extracted["category"] = full_cat
                 break
         
-        # If not found via map, try regex and fuzzy match with DB
+        
+        # --- STRICT MODE: Detect unknown category requests (Option B) ---
+        # If user says "sách về X" but X is NOT in category_map → flag as unknown
         if "category" not in extracted:
-            sorted_cats = sorted(all_categories, key=len, reverse=True)
-            for cat in sorted_cats:
-                cat_norm = remove_diacritics(cat.lower())
-                # Direct match
-                if cat_norm in q_norm:
-                    extracted["category"] = cat 
-                    break 
-
-            # If still not found, try regex patterns for explicit category intent
-            if "category" not in extracted:
-                for pattern in cat_patterns:
-                    match = re.search(pattern, q_norm)
-                    if match:
-                        potential_cat = match.group(1).strip()
-                        # Fuzzy check against DB
-                        for cat in sorted_cats:
-                            cat_norm = remove_diacritics(cat.lower())
-                            if cat_norm in potential_cat or potential_cat in cat_norm:
-                                extracted["category"] = cat
-                                break
-                    if "category" in extracted: break
+            # Check if query matches "sách về X" or "về X" pattern
+            # Use ORIGINAL query (with diacritics) for display purposes
+            q_lower = query.lower()  # Keep diacritics for display
+            
+            unknown_cat_patterns_orig = [
+                r"sách\s+về\s+(\w+)",        # sách về X (với dấu)
+                r"về\s+(\w+)",                # về X  
+                r"thể loại\s+(\w+)",          # thể loại X
+                r"chủ đề\s+(\w+)",            # chủ đề X
+            ]
+            # Also check normalized patterns
+            unknown_cat_patterns_norm = [
+                r"sach\s+ve\s+(\w+)",
+                r"ve\s+(\w+)",
+                r"the loai\s+(\w+)",
+                r"chu de\s+(\w+)",
+            ]
+            
+            original_topic = None
+            normalized_topic = None
+            
+            # First try to get original topic (với dấu)
+            for pattern in unknown_cat_patterns_orig:
+                match = re.search(pattern, q_lower)
+                if match:
+                    original_topic = match.group(1).strip()
+                    break
+            
+            # Then check normalized for validation
+            for pattern in unknown_cat_patterns_norm:
+                match = re.search(pattern, q_norm)
+                if match:
+                    normalized_topic = match.group(1).strip()
+                    break
+            
+            if normalized_topic:
+                # Check if this topic exists in category_map keys
+                is_known = any(normalized_topic == key or key in normalized_topic for key in category_map.keys())
+                if not is_known and len(normalized_topic) >= 2:
+                    # Use original topic (với dấu) for display, fallback to normalized
+                    display_topic = original_topic if original_topic else normalized_topic
+                    extracted["_unknown_category_request"] = display_topic
+                    logger.info(f"Detected unknown category request: '{display_topic}'")
 
         if extracted:
             logger.info(f"Auto-extracted filters: {extracted}")
@@ -861,6 +951,17 @@ class RAGEngine:
             if intent == "SEARCH" and not filters:
                 extracted_filters = self._extract_filters_from_text(question)
                 if extracted_filters:
+                    # Check for unknown category request (STRICT MODE - Option B)
+                    if "_unknown_category_request" in extracted_filters:
+                        unknown_topic = extracted_filters.pop("_unknown_category_request")
+                        # Return "no results" message instead of doing semantic search
+                        answer = f"Xin lỗi, thư viện hiện không có sách thuộc thể loại '{unknown_topic}'. Vui lòng thử tìm với từ khóa khác."
+                        session.add_message("model", answer)
+                        return {
+                            "answer": answer,
+                            "intent": "SEARCH",
+                            "sources": []
+                        }
                     filters = extracted_filters
             # -----------------------------------------------------------
 
@@ -1009,12 +1110,20 @@ class RAGEngine:
         # Search với filters nếu được cung cấp
         raw_docs = self.search_engine.search(query=search_query, filters=filters, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
         
-        # --- FEATURE ADDED: RELAXED SEARCH FALLBACK ---
-        # If filtered search fails (e.g. strict category mismatch), retry without filters
-        # relying purely on semantic vector match.
+        # --- FIX: STRICT CATEGORY FILTER ---
+        # If user specified a category filter but no results found:
+        # DO NOT relax filter - instead return "no books found" message
+        # This prevents returning unrelated books (e.g., "sách về thơ" returning programming books)
         if not raw_docs and filters:
-            logger.info("Search with filters yielded 0 results. Retrying with RELAXED search (no filters)...")
-            raw_docs = self.search_engine.search(query=search_query, filters=None, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
+            if "category" in filters:
+                # User explicitly asked for a category - be strict
+                category_name = filters["category"]
+                logger.info(f"No books found for category '{category_name}'. Returning empty (strict mode).")
+                return f"Xin lỗi, hiện tại thư viện không có sách thuộc thể loại '{category_name}'. Bạn có thể thử tìm với từ khóa khác không?", []
+            else:
+                # Only relax search for non-category filters (title, author, year)
+                logger.info("Search with filters yielded 0 results. Retrying with RELAXED search (no filters)...")
+                raw_docs = self.search_engine.search(query=search_query, filters=None, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
             
         if not raw_docs:
             return self._gemini_fallback(question, session), []
