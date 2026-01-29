@@ -29,10 +29,7 @@ GEMINI_API_KEYS = list(set([k for k in GEMINI_API_KEYS if k]))
 # Models to rotate through (fallback strategy)
 GEMINI_MODELS = [
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-tts",
-    "gemini-3-flash",
-    "gemma-3-27b"
+    "gemini-2.5-flash-lite"
 ]
 
 
@@ -40,7 +37,7 @@ GEMINI_MODEL = GEMINI_MODELS[0] # Default
 
 # Search Configuration
 DEFAULT_TOP_K = 5
-SCORE_THRESHOLD = 0.80
+SCORE_THRESHOLD = 0.85
 
 # RAG Behavior
 MIN_QUERY_LENGTH = 3

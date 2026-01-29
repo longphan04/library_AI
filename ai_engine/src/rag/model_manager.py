@@ -1,11 +1,77 @@
 import logging
 import time
-from typing import List, Optional
+from typing import List, Optional, Any
 from google import genai
 from google.genai import types
 from google.api_core import exceptions as google_exceptions
 
 logger = logging.getLogger("ModelManager")
+
+
+def extract_text_from_response(response: Any) -> Optional[str]:
+    """
+    Safely extract text from Gemini response.
+    Handles different response formats from google-genai SDK.
+    """
+    if response is None:
+        return None
+
+    # DEBUG: Log response type and structure
+    logger.debug(f"Response type: {type(response)}")
+    logger.debug(f"Response dir: {[a for a in dir(response) if not a.startswith('_')]}")
+
+    # Case 1: response.text is a string (most common)
+    if hasattr(response, 'text'):
+        text = response.text
+        logger.debug(f"response.text type: {type(text)}, value preview: {str(text)[:200] if text else None}")
+        if isinstance(text, str):
+            return text.strip() if text else None
+        # If text is not a string but exists, try to convert or extract
+        if text is not None:
+            logger.warning(f"response.text is not str, it's {type(text)}")
+
+    # Case 2: response has candidates (Gemini format)
+    if hasattr(response, 'candidates') and response.candidates:
+        try:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                content = candidate.content
+                if hasattr(content, 'parts') and content.parts:
+                    parts_text = []
+                    for part in content.parts:
+                        if hasattr(part, 'text') and isinstance(part.text, str):
+                            parts_text.append(part.text)
+                    if parts_text:
+                        return ''.join(parts_text).strip()
+        except (IndexError, AttributeError, TypeError) as e:
+            logger.warning(f"Failed to extract from candidates: {e}")
+
+    # Case 3: response is dict-like
+    if isinstance(response, dict):
+        # Try common keys
+        for key in ['text', 'content', 'output', 'message']:
+            if key in response and isinstance(response[key], str):
+                return response[key].strip()
+
+        # Try nested candidates structure
+        candidates = response.get('candidates', [])
+        if candidates and isinstance(candidates, list):
+            try:
+                content = candidates[0].get('content', {})
+                parts = content.get('parts', [])
+                if parts and isinstance(parts, list):
+                    text = parts[0].get('text', '')
+                    if isinstance(text, str):
+                        return text.strip()
+            except (IndexError, KeyError, TypeError):
+                pass
+
+    # Case 4: response is already a string
+    if isinstance(response, str):
+        return response.strip() if response else None
+
+    logger.warning(f"Could not extract text from response type: {type(response)}")
+    return None
 
 class ModelManager:
     """
@@ -76,7 +142,8 @@ class ModelManager:
                         max_output_tokens=max_tokens
                     )
                 )
-                return response.text.strip() if response and response.text else None
+                # Use safe extraction to handle various response formats
+                return extract_text_from_response(response)
 
             except Exception as e:
                 # Check for Rate Limit errors
@@ -84,7 +151,16 @@ class ModelManager:
                 err_str = str(e).lower()
                 logger.error(f"Generate Error (Key {self.current_key_idx} | Model {model}): {type(e).__name__} - {e}")
                 
-                is_rate_limit = "429" in err_str or "resource" in err_str or "exhausted" in err_str or "quota" in err_str
+                is_rate_limit = "429" in err_str or "resource" in err_str or "exhausted" in err_str or "quota" in err_str or "403" in err_str or "permission" in err_str
+                is_model_error = "404" in err_str or "not found" in err_str or "support" in err_str or "bad request" in err_str
+
+                if is_model_error:
+                    logger.warning(f"Model {model} error. Switching model immediately...")
+                    if self._switch_model():
+                        self.current_key_idx = 0 # Try new model with first key
+                        continue
+                    else:
+                        raise e # No more models
 
                 if is_rate_limit:
                     logger.warning(f"Rate limit hit on Key {self.current_key_idx} Model {model}. Rotating...")

@@ -24,9 +24,12 @@ def remove_diacritics(text: str) -> str:
     Example: "xin chào" -> "xin chao"
     """
     # Normalize to NFD form (separates base char and diacritics)
+    # Normalize to NFD form (separates base char and diacritics)
     nfkd_form = unicodedata.normalize('NFD', text)
     # Remove combining diacritical marks
-    return ''.join(c for c in nfkd_form if not unicodedata.combining(c))
+    text_without_accent = ''.join(c for c in nfkd_form if not unicodedata.combining(c))
+    # Manual replace for 'đ' and 'Đ' which are not decomposable in NFD
+    return text_without_accent.replace('đ', 'd').replace('Đ', 'D')
 
 from config.settings import settings
 from src.search_engine import SearchEngine
@@ -256,18 +259,78 @@ class RAGEngine:
 
         if q in smalltalk_keywords:
             return True
-        return any(k in q for k in smalltalk_keywords)
+
+        # Use simple word boundary check for all keywords to avoid false positives
+        # E.g. "hi" should NOT match "chi tiet"
+        q_words = set(q.split())
+        for k in smalltalk_keywords:
+            # If keyword is single word, check if it exists in word set
+            if " " not in k:
+                if k in q_words:
+                    return True
+            # If keyword matches exactly part of the phrase (simpler than regex)
+            elif k in q:
+                return True
+
+        return False
 
     def answer_smalltalk(self, question: str, session: ChatSession) -> str:
         """
-        Dùng Gemini trả lời smalltalk thông minh (THÊM TỪ HEAD)
-        Lý do: Thay vì trả lời cứng, dùng LLM để trả lời tự nhiên hơn
+        Tra loi smalltalk. Uu tien tra loi san, chi goi AI khi can.
         """
-        prompt = SMALLTALK_PROMPT_TEMPLATE.format(
-            history=session.get_history_text(),
-            question=question
-        )
-        return self._call_gemini(prompt, temperature=0.7, max_tokens=150)
+        q = remove_diacritics(question.lower().strip())
+        q = re.sub(r'[?.!,;:]', '', q)
+
+        # Hardcoded responses - KHONG CAN GOI AI
+        greetings = ["xin chao", "chao ban", "chao", "hello", "hi", "hey", "alo", "yo"]
+        thanks = ["cam on", "cam on ban", "thanks", "thank you", "tks", "ty"]
+        goodbyes = ["tam biet", "bye", "goodbye", "see you", "hen gap lai"]
+        who_are_you = ["ban la ai", "ten gi", "who are you", "what is your name"]
+        how_are_you = ["khoe khong", "ban on khong", "how are you", "what's up"]
+        helps = ["giup toi", "giup minh", "help", "ho tro"]
+        oks = ["ok", "okay", "duoc", "duoc roi", "dc", "dk"]
+
+        q_words = set(q.split())
+
+        def check_keywords(keywords):
+            for k in keywords:
+                if " " not in k: # Single word -> check word set
+                    if k in q_words: return True
+                elif k in q: # Multi word -> check substring
+                    return True
+            return False
+
+        # Check and return hardcoded response
+        if check_keywords(greetings):
+            return "Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp bạn tìm sách, tra cứu thông tin thư viện. Bạn cần gì nào?"
+
+        if check_keywords(thanks):
+            return "Không có gì! Nếu bạn cần gì thêm, cứ hỏi nhé!"
+
+        if check_keywords(goodbyes):
+            return "Tạm biệt! Hẹn gặp lại bạn!"
+
+        if check_keywords(who_are_you):
+            return "Tôi là Trợ lý AI của Thư viện. Tôi có thể giúp bạn tìm sách, tra cứu giờ mở cửa, nội quy và các thông tin khác về thư viện."
+
+        if check_keywords(how_are_you):
+            return "Tôi vẫn khỏe! Cảm ơn bạn đã hỏi. Bạn cần tìm sách gì hôm nay?"
+
+        if check_keywords(helps):
+            return "Tôi có thể giúp bạn: Tìm sách theo chủ đề, tác giả hoặc thể loại; Tra cứu giờ mở cửa thư viện; Xem nội quy và quy định mượn sách. Bạn muốn làm gì?"
+
+        if check_keywords(oks):
+            return "Vâng! Nếu bạn cần gì thêm, cứ hỏi nhé!"
+
+        # Fallback to AI for complex/unknown smalltalk
+        try:
+            prompt = SMALLTALK_PROMPT_TEMPLATE.format(
+                history=session.get_history_text(),
+                question=question
+            )
+            return self._call_gemini(prompt, temperature=0.7, max_tokens=150)
+        except Exception:
+            return "Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp gì cho bạn?"
 
     # ==================================================
     # BOOK RELATED CHECK (THÊM TỪ HEAD)
@@ -476,57 +539,121 @@ class RAGEngine:
                 - intent: str - Detected intent (SEARCH, SMALLTALK, FOLLOWUP, etc.)
                 - sources: List[Dict] - Book results (only for SEARCH intent, empty for others)
         """
-        session = self.get_session(session_id)
-        session.add_message("user", question)
+        try:
+            session = self.get_session(session_id)
+            session.add_message("user", question)
 
-        intent = self.classify_intent(question, session)
-        logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question} | Filters: {filters}")
+            intent = self.classify_intent(question, session)
+            logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question} | Filters: {filters}")
 
-        answer = ""
-        sources = []  # Only return sources for SEARCH intent
+            answer = ""
+            sources = []  # Only return sources for SEARCH intent
 
-        if intent == "GARBAGE":
-            answer = "Cau hoi khong hop le hoac qua ngan."
+            if intent == "GARBAGE":
+                answer = "Câu hỏi không hợp lệ hoặc quá ngắn."
 
-        elif intent == "SMALLTALK":
-            answer = self.answer_smalltalk(question, session)
+            elif intent == "SMALLTALK":
+                answer = self.answer_smalltalk(question, session)
 
-        elif intent == "FOLLOWUP":
-            answer = self.answer_followup(question, session)
-            # Follow-up: don't return sources, info is from session internally
+            elif intent == "FOLLOWUP":
+                answer = self.answer_followup(question, session)
+                # Follow-up: don't return sources, info is from session internally
 
-        elif intent == "STATS":
-            total = self.vector_db.get_collection_stats().get("count", 0)
-            answer = f"Hien tai thu vien co **{total} cuon sach** trong he thong."
+            elif intent == "STATS":
+                total = self.vector_db.get_collection_stats().get("count", 0)
+                answer = f"Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
 
-        elif intent == "LIBRARY_INFO":
-            answer = self._generate_library_info_answer(question, session)
+            elif intent == "LIBRARY_INFO":
+                answer = self._generate_library_info_answer(question, session)
 
-        else:  # SEARCH
-            # Normalize topic queries va truyen filters tu FE
-            normalized_query = self._normalize_book_query(question)
-            answer, sources = self._perform_book_search(normalized_query, session, filters=filters)
+            else:  # SEARCH
+                # Normalize topic queries va truyen filters tu FE
+                normalized_query = self._normalize_book_query(question)
+                answer, sources = self._perform_book_search(normalized_query, session, filters=filters)
 
-        session.add_message("model", answer)
-        
-        return {
-            "answer": answer,
-            "intent": intent,
-            "sources": sources
-        }
+            session.add_message("model", answer)
+
+            return {
+                "answer": answer,
+                "intent": intent,
+                "sources": sources
+            }
+        except Exception as e:
+            logger.error(f"Critical error in generate_answer: {str(e)}")
+            return {
+                "answer": "Xin lỗi, hệ thống đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.",
+                "intent": "ERROR",
+                "sources": []
+            }
 
     # ==================================================
     # SUB-HANDLERS
     # ==================================================
     def is_library_info_query(self, q: str) -> bool:
         ql = remove_diacritics(q.lower())
-        keywords = ["mo cua", "quy dinh", "muon sach", "tra sach", "phi phat", "noi quy", "gio mo cua"]
+        # Keywords for library info must be specific to RULES/POLICIES, not just actions
+        # "muon sach" alone is ambiguous (could be search), so query must imply "how to" or "rules"
+        keywords = [
+            "gio mo cua", "thoi gian mo cua", "lich mo cua",
+            "quy dinh", "noi quy", "luat thu vien",
+            "phi phat", "tien phat",
+            "cach muon", "thu tuc muon", "dieu kien muon", "luat muon", "huong dan muon",
+            "cach tra", "thu tuc tra", "luat tra", "huong dan tra",
+            "muon bao lau", "muon duoc may", "gia han"
+        ]
+        # Special check: "muon sach" only if NOT accompanied by specific book topics implies info request?
+        # Actually safer to just rely on "cach/quy dinh/..." for INFO.
+        # If user says "toi muon muon sach", let it fall to SEARCH or generic AI which clarifies.
+
         return any(k in ql for k in keywords)
 
     def _generate_library_info_answer(self, question: str, session: ChatSession) -> str:
-        ctx = self._build_library_context()
-        prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books="(Không áp dụng)", **ctx)}"""
-        return self._call_gemini(prompt)
+        """
+        Tra loi cau hoi ve thu vien. Uu tien tra loi san cho cau hoi pho bien.
+        """
+        ql = remove_diacritics(question.lower())
+
+        # Hardcoded responses - KHONG CAN GOI AI
+        if any(k in ql for k in ["gio mo cua", "mo cua", "may gio"]):
+            return f"Thư viện mở cửa: {LIBRARY_INFO['opening_hours']}. Ngoài giờ này thư viện đóng cửa."
+
+        # Check SPECIFIC policies first (Borrow/Return) before GENERAL rules
+        if any(k in ql for k in ["muon sach", "muon", "borrow", "gia han"]):
+            bp = LIBRARY_INFO['borrow_policy']
+            return f"Quy định mượn sách:\n- {bp['fee']}\n- {bp['duration']}\n- {bp['renew']}"
+
+        if any(k in ql for k in ["tra sach", "tra", "return"]):
+            pp = LIBRARY_INFO['penalty_policy']
+            return f"Quy định trả sách:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
+
+        if any(k in ql for k in ["phi phat", "phat", "penalty"]):
+            pp = LIBRARY_INFO['penalty_policy']
+            return f"Quy định phí phạt:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
+
+        # Only if no specific policy is matched, return general rules
+        if any(k in ql for k in ["noi quy", "quy dinh", "luat"]):
+            rules = "\n".join([f"- {r}" for r in LIBRARY_INFO['library_rules']])
+            return f"Nội quy thư viện:\n{rules}"
+
+        if any(k in ql for k in ["muon sach", "muon", "borrow"]):
+            bp = LIBRARY_INFO['borrow_policy']
+            return f"Quy định mượn sách:\n- {bp['fee']}\n- {bp['duration']}\n- {bp['renew']}"
+
+        if any(k in ql for k in ["tra sach", "tra", "return"]):
+            pp = LIBRARY_INFO['penalty_policy']
+            return f"Quy định trả sách:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
+
+        if any(k in ql for k in ["phi phat", "phat", "penalty"]):
+            pp = LIBRARY_INFO['penalty_policy']
+            return f"Quy định phí phạt:\n- {pp['late_return']}\n- {pp['account_lock']}\n- {pp['lost_book']}"
+
+        # Fallback to AI for complex library questions
+        try:
+            ctx = self._build_library_context()
+            prompt = f"""{SYSTEM_PROMPT}\n{USER_PROMPT_TEMPLATE.format(question=question, books="(Khong ap dung)", **ctx)}"""
+            return self._call_gemini(prompt)
+        except Exception:
+            return f"Thư viện mở cửa: {LIBRARY_INFO['opening_hours']}. Nếu cần thông tin cụ thể, vui lòng hỏi lại."
 
     def _perform_book_search(self, question: str, session: ChatSession, filters: dict = None) -> tuple:
         """

@@ -20,7 +20,8 @@ LIBRARY_INFO = {
     "borrow_policy": {
         "fee": "Mượn sách hoàn toàn miễn phí",
         "duration": "Thời hạn mượn tối đa 10 ngày",
-        "renew": "Có thể gia hạn nếu sách chưa có người đặt trước"
+        "renew": "Có thể gia hạn nếu sách vẫn còn trong thời hạn mượn",
+        "max_books": "Mỗi lần mượn tối đa 5 cuốn sách",
     },
     "penalty_policy": {
         "late_return": "Trả sách trễ sẽ bị phạt theo số ngày trễ",
@@ -197,6 +198,135 @@ Hướng dẫn trả lời:
 Trả lời bằng tiếng Việt, thân thiện, chính xác. Có thể dùng emoji phù hợp.
 KHÔNG bịa tên sách hoặc thông tin không chính xác.
 """
+
+# =====================================================
+# DESCRIPTION GENERATION PROMPTS
+# =====================================================
+
+def get_description_prompt_with_preview_text(
+    title: str,
+    authors: str,
+    categories: str,
+    publisher: str,
+    published_date: str,
+    preview_text: str,
+    max_length: int = 1000
+) -> str:
+    """Generate prompt for description when preview text is available."""
+    return f"""Bạn là chuyên gia viết mô tả sách chuyên nghiệp.
+
+THÔNG TIN SÁCH:
+- Tên sách: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Nhà xuất bản: {publisher}
+- Năm xuất bản: {published_date}
+
+NỘI DUNG XEM TRƯỚC:
+{preview_text}
+
+YÊU CẦU:
+1. Viết mô tả chi tiết, hấp dẫn cho cuốn sách
+2. Độ dài: {max_length} ký tự (tối thiểu 500, tối đa {max_length})
+3. Sử dụng thông tin từ nội dung xem trước
+4. Viết bằng tiếng Việt, văn phong chuyên nghiệp
+5. KHÔNG bịa thông tin không có
+
+Hãy viết mô tả:"""
+
+
+def get_description_prompt_with_existing_desc(
+    title: str,
+    authors: str,
+    categories: str,
+    publisher: str,
+    published_date: str,
+    existing_desc: str,
+    max_length: int = 1000
+) -> str:
+    """Generate prompt for description when existing description is available."""
+    return f"""Bạn là chuyên gia viết mô tả sách chuyên nghiệp.
+
+THÔNG TIN SÁCH:
+- Tên sách: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Nhà xuất bản: {publisher}
+- Năm xuất bản: {published_date}
+
+MÔ TẢ HIỆN CÓ:
+{existing_desc}
+
+YÊU CẦU:
+1. Viết lại mô tả chi tiết hơn, hấp dẫn hơn cho cuốn sách
+2. Độ dài: {max_length} ký tự (tối thiểu 500, tối đa {max_length})
+3. Dựa trên mô tả hiện có nhưng mở rộng và cải thiện
+4. Viết bằng tiếng Việt, văn phong chuyên nghiệp
+5. KHÔNG bịa thông tin không có
+
+Hãy viết mô tả:"""
+
+
+def get_description_prompt_metadata_only(
+    title: str,
+    authors: str,
+    categories: str,
+    published_date: str,
+    max_length: int = 1000
+) -> str:
+    """Generate prompt for description when only metadata is available."""
+    return f"""Bạn là chuyên gia viết mô tả sách chuyên nghiệp.
+
+THÔNG TIN SÁCH:
+- Tên sách: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Năm xuất bản: {published_date}
+
+YÊU CẦU:
+1. Viết mô tả chi tiết, hấp dẫn cho cuốn sách dựa trên metadata
+2. Độ dài: {max_length} ký tự (tối thiểu 500, tối đa {max_length})
+3. Suy luận hợp lý từ tên sách, tác giả và thể loại
+4. Viết bằng tiếng Việt, văn phong chuyên nghiệp
+5. KHÔNG bịa thông tin cụ thể như số trang, nội dung chi tiết
+
+Hãy viết mô tả:"""
+
+
+def get_description_prompt_for_template_ai(
+    book_title: str,
+    book_authors: str,
+    book_categories: str,
+    publisher: str,
+    published_date: str,
+    page_count: str,
+    existing_desc: str = ""
+) -> str:
+    """Generate prompt for template-based AI description."""
+    context = f"""
+MÔ TẢ HIỆN CÓ: {existing_desc}
+""" if existing_desc else ""
+
+    return f"""Bạn là chuyên gia viết mô tả sách chuyên nghiệp.
+
+THÔNG TIN SÁCH:
+- Tên sách: {book_title}
+- Tác giả: {book_authors}
+- Thể loại: {book_categories}
+- Nhà xuất bản: {publisher}
+- Năm xuất bản: {published_date}
+- Số trang: {page_count}
+{context}
+
+YÊU CẦU:
+1. Viết mô tả ĐỘC ĐÁO, không theo template cứng
+2. Độ dài: 500-800 ký tự
+3. Nêu bật giá trị của sách cho người đọc
+4. Phù hợp với thể loại và đối tượng đọc giả
+5. Viết bằng tiếng Việt, văn phong chuyên nghiệp, hấp dẫn
+
+Hãy viết mô tả:"""
+
 
 # =====================================================
 # DESCRIPTION PROMPT HELPERS (DÙNG CHO description.py)
