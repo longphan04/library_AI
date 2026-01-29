@@ -191,12 +191,12 @@ Câu hỏi của người dùng: "{question}"
 
 Hướng dẫn trả lời:
 1. Nếu là câu hỏi kiến thức chung (toán, khoa học, lịch sử, v.v.): Trả lời chính xác, ngắn gọn
-2. Nếu là câu hỏi về sách nhưng thư viện không có: Nói rõ thư viện chưa có sách phù hợp
-3. Nếu là câu hỏi cá nhân hoặc không phù hợp: Nhẹ nhàng từ chối và hướng về chức năng thư viện
-4. Nếu là câu hỏi tiếp nối: Dựa vào lịch sử để trả lời chính xác
+2. Nếu là câu hỏi về sách nhưng thư viện không có (không có trong ngữ cảnh): Nói rõ thư viện chưa có sách phù hợp HOẶC gợi ý chung chung (nhưng KHÔNG được bịa tên sách cụ thể).
+3. TUYỆT ĐỐI KHÔNG BỊA RA TÊN SÁCH, TÁC GIẢ NẾU KHÔNG CÓ DỮ LIỆU ĐẦU VÀO.
+4. Nếu là câu hỏi cá nhân hoặc không phù hợp: Nhẹ nhàng từ chối và hướng về chức năng thư viện
+5. Nếu là câu hỏi tiếp nối: Dựa vào lịch sử để trả lời chính xác
 
 Trả lời bằng tiếng Việt, thân thiện, chính xác. Có thể dùng emoji phù hợp.
-KHÔNG bịa tên sách hoặc thông tin không chính xác.
 """
 
 # =====================================================

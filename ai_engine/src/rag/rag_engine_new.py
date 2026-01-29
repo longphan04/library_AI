@@ -74,7 +74,7 @@ Hãy trả lời một cách thân thiện, tự nhiên bằng tiếng Việt.
 - Nếu hỏi về bạn: giới thiệu bạn là trợ lý AI thư viện
 - Nếu là câu hỏi chung: trả lời ngắn gọn, thông minh
 
-Trả lời ngắn gọn (1-3 câu), thân thiện, có thể dùng emoji phù hợp.
+Trả lời ngắn gọn (1-3 câu), thân thiện. KHÔNG dùng emoji.
 KHÔNG đưa ra danh sách sách nếu không được hỏi.
 """
 
@@ -92,7 +92,8 @@ Hướng dẫn trả lời:
 3. Nếu là câu hỏi cá nhân hoặc không phù hợp: Nhẹ nhàng từ chối và hướng về chức năng thư viện
 4. Nếu là câu hỏi tiếp nối: Dựa vào lịch sử để trả lời chính xác
 
-Trả lời bằng tiếng Việt, thân thiện, chính xác. Có thể dùng emoji phù hợp.
+Trả lời bằng tiếng Việt, thân thiện, chính xác.
+KHÔNG dùng emoji/icon. KHÔNG dùng định dạng bôi đen (**text**).
 KHÔNG bịa tên sách hoặc thông tin không chính xác.
 """
 
@@ -121,8 +122,8 @@ Hướng dẫn trả lời:
 2. Nếu hỏi "cuốn nào hay/dễ/tốt nhất" → chọn từ danh sách sách đã đề cập và giải thích lý do
 3. Nếu hỏi "cuốn thứ X" → tham chiếu đến vị trí trong danh sách
 4. Nếu hỏi chi tiết về một cuốn → cung cấp thông tin có sẵn
-5. Trả lời tự nhiên, thân thiện, có thể dùng emoji
-6. KHÔNG bịa thông tin không có
+5. Trả lời ngắn gọn, đi thẳng vào vấn đề.
+6. KHÔNG dùng icon/emoji. KHÔNG dùng định dạng bôi đen (**text**).
 """
 
 
@@ -231,6 +232,19 @@ class RAGEngine:
         q = question.lower().strip()
         q = re.sub(r'[?.!,;:]', '', q)
         q = remove_diacritics(q)  # Convert "xin chào" -> "xin chao"
+        
+        # FIX: Exclude book-related help requests like "giúp tôi tìm sách python"
+        help_keywords = ["giup toi", "giup minh", "help", "help me", "ho tro"]
+        book_context_keywords = ["sach", "cuon", "quyen", "tim", "co", "muon"]
+        
+        # Check if query contains help keyword (substring match)
+        has_help = any(help_kw in q for help_kw in help_keywords)
+        # Check if query contains book keyword
+        has_book_context = any(book_kw in q for book_kw in book_context_keywords)
+        
+        # If it has BOTH help AND book context, it's a book query, NOT smalltalk
+        if has_help and has_book_context:
+            return False
 
         smalltalk_keywords = [
             # Chao hoi
@@ -254,7 +268,7 @@ class RAGEngine:
             "alo", "yo", "hii", "hiii", "helloo", "helo",
             # Xin loi / OK
             "xin loi", "sorry", "ok", "okay", "duoc", "duoc roi", "dc", "dk",
-            # Giup do
+            # Giup do (only if no book context)
             "giup toi", "giup minh", "help", "help me", "ho tro"
         ]
 
@@ -390,6 +404,11 @@ class RAGEngine:
         # 3. Library info check
         if self.is_library_info_query(query):
             return "LIBRARY_INFO"
+        
+        # 3b. TITLE_SEARCH check (NEW - High Priority)
+        # Detect explicit book title queries
+        if self._is_title_search_query(query):
+            return "TITLE_SEARCH"
 
         # 4. Follow-up check
         if session.last_search_results:
@@ -412,16 +431,121 @@ class RAGEngine:
 
     def is_library_stats_query(self, q: str) -> bool:
         ql = remove_diacritics(q.lower())
-        keywords = [
-            "bao nhieu cuon sach",
-            "bao nhieu quyen sach",
-            "bao nhieu sach",
-            "tong so sach",
-            "so luong sach",
-            "thu vien co bao nhieu",
-            "hien co bao nhieu",
+        # Regex for flexible matching:
+        # 1. "bao nhieu" + anything + "sach/cuon/quyen/tac pham"
+        # 2. "tong so" + "sach"
+        # 3. "so luong" + "sach"
+        patterns = [
+            r"bao nhieu.*(?:sach|cuon|quyen|tac pham)",
+            r"(?:tong so|so luong).*(?:sach|cuon|quyen|tac pham)",
+            r"co.*bao nhieu", # "thu vien co bao nhieu"
+            r"co.*tat ca"      # "co tat ca bao nhieu..."
         ]
-        return any(k in ql for k in keywords)
+        
+        for p in patterns:
+            if re.search(p, ql):
+                return True
+        return False
+    
+    def is_library_info_query(self, q: str) -> bool:
+        """
+        Detect library information queries (opening hours, rules, policies).
+        """
+        ql = remove_diacritics(q.lower())
+        
+        # Opening hours - check ALL possible combinations
+        has_opening_words = any(word in ql for word in ["mo cua", "dong cua", "mo", "dong"])
+        has_time_words = any(word in ql for word in ["gio", "luc", "may", "thoi gian"])
+        
+        if has_opening_words and has_time_words:
+            return True
+        
+        if "gio" in ql and ("hoat dong" in ql or "lam viec" in ql):
+            return True
+        
+        # Rules and policies
+        if any(kw in ql for kw in ["noi quy", "quy dinh", "quy tac"]):
+            return True
+        
+        # Borrowing/returning
+        if ("muon sach" in ql or "muon" in ql) and ("the nao" in ql or "quy dinh" in ql):
+            return True
+        if ("tra sach" in ql or "tra" in ql) and ("the nao" in ql or "quy dinh" in ql):
+            return True
+        
+        # Penalties
+        if any(kw in ql for kw in ["phi phat", "phat", "penalty"]):
+            return True
+        
+        return False
+
+    def _is_title_search_query(self, query: str) -> bool:
+        """
+        Detect if query is explicitly searching for a specific book title.
+        Examples: "tìm cuốn Sapiens", "có sách Clean Code không", "tìm sách Trò chuyện khoa học"
+        NOTE: "tìm sách về toán" is NOT a title search (it's category search)
+        """
+        q_norm = remove_diacritics(query.lower())
+        
+        # Patterns indicating explicit title search
+        # FIXED: "sach" alone is too broad; require more specific patterns
+        title_indicators = [
+            r"(?:tim|co|muon|kiem)\s+cuon\s+([a-z0-9\s]{3,})",  # "tìm cuốn [Title]" - cuốn is more specific
+            r"(?:cuon|quyen)\s+(?:ten|tua|co ten)\s+(?:la\s+)?([a-z0-9\s]{3,})",  # "cuốn tên là [Title]"
+        ]
+        
+        for pattern in title_indicators:
+            match = re.search(pattern, q_norm)
+            if match:
+                potential_title = match.group(1).strip()
+                
+                # FIXED: Expanded category keywords list and use substring check
+                category_keywords = [
+                    "toan", "ly", "hoa", "van", "su", "dia", "sinh",
+                    "kinh te", "tai chinh", "marketing", "lap trinh",
+                    "python", "java", "ai", "machine learning",
+                    "van hoc", "lich su", "khoa hoc", "tam ly", "triet hoc",
+                    "kinh doanh", "quan tri", "ky nang", "ngoai ngu"
+                ]
+                
+                # FIXED: Check if potential_title starts with "ve " (common false positive)
+                if potential_title.startswith("ve "):
+                    return False
+                
+                # FIXED: Use substring match instead of exact equality
+                is_category = any(kw in potential_title or potential_title in kw for kw in category_keywords)
+                
+                # If captured text is NOT a category keyword, it's likely a title
+                if len(potential_title) >= 3 and not is_category:
+                    return True
+        
+        return False
+
+    def _normalize_query(self, query: str) -> str:
+        """
+        Query preprocessing pipeline: remove noise, standardize synonyms.
+        Improves classification and filter extraction accuracy.
+        """
+        q = query.strip().lower()
+        
+        # 1. Remove Vietnamese noise/filler words
+        noise_words = ["ơi", "à", "ạ", "nhé", "nha", "đi", "cho tôi", "giúp tôi", "cho mình", "giúp mình"]
+        for noise in noise_words:
+            q = q.replace(noise, "")
+        
+        # 2. Standardize synonyms (book-related)
+        synonym_map = {
+            "quyển": "cuốn",
+            "tác phẩm": "sách",
+            "ebook": "sách",
+        }
+        for old, new in synonym_map.items():
+            q = q.replace(old, new)
+        
+        # 3. Normalize spacing (remove extra spaces)
+        q = re.sub(r'\s+', ' ', q).strip()
+        
+        return q
 
     def _normalize_book_query(self, question: str) -> str:
         """Chuan hoa mot so cau goi y de search trung chu de hon."""
@@ -485,11 +609,11 @@ class RAGEngine:
         if 0 <= idx < len(session.last_search_results):
             b = session.last_search_results[idx]
             return (
-                f"**{b['title']}**\n"
+                f"{b['title']}\n"
                 f"- Tác giả: {b['authors']}\n"
                 f"- Năm xuất bản: {b['publish_year']}\n"
                 f"- Mã sách: {b['identifier']}\n\n"
-                f"**Nội dung:**\n{b.get('richtext','')[:1000]}..."
+                f"Nội dung:\n{b.get('richtext','')[:1000]}..."
             )
 
         # 4. THÊM: Dùng LLM để trả lời follow-up phức tạp (từ HEAD)
@@ -522,33 +646,228 @@ class RAGEngine:
             "penalty_policy": "\n".join(f"- {k}: {v}" for k, v in LIBRARY_INFO["penalty_policy"].items()),
         }
 
-    # ==================================================
-    # MAIN GENERATE FUNCTION (CẢI TIẾN)
-    # ==================================================
+    def _extract_filters_from_text(self, query: str) -> dict:
+        """
+        AI Auto-Extraction: Tự động rút trích filter từ câu hỏi user.
+        Dựa trên danh sách Categories/Authors có sẵn trong DB và Settings.
+        Hỗ trợ nhận diện qua Regex và Keyword Matching.
+        """
+        extracted = {}
+        q_norm = remove_diacritics(query.lower())
+        
+        # 1. Get metadata source
+        available_filters = self.search_engine.get_filters()
+        db_categories = available_filters.get("categories", [])
+        db_authors = available_filters.get("authors", [])
+        
+        # Merge with hardcoded topics from Settings for better coverage
+        from config.settings import settings
+        all_categories = list(set(db_categories + settings.CRAWL_TOPICS))
+        
+        # 2. DEFINED MAPPINGS (Synonyms)
+        # Map short/common terms to EXACT category names in DB
+        # Based on final_categories.md: "Toán", "Kinh tế", "Văn học", "Máy tính", etc.
+        category_map = {
+            "python": "Máy tính", # Or "Lập trình" if exists? Let's check logic. Actually DB likely has "Máy tính" or "Công nghệ thông tin"
+            "cntt": "Công nghệ thông tin",
+            "it": "Công nghệ thông tin",
+            "ai": "Trí tuệ và Dữ liệu",
+            "tri tue nhan tao": "Trí tuệ và Dữ liệu",
+            "machine learning": "Trí tuệ và Dữ liệu",
+            "hoc may": "Trí tuệ và Dữ liệu",
+            "data science": "Trí tuệ và Dữ liệu",
+            "khoa hoc du lieu": "Trí tuệ và Dữ liệu",
+            "toan": "Toán",
+            "toan hoc": "Toán",
+            "ly": "Vật lý",
+            "vat ly": "Vật lý",
+            "hoa": "Hóa học",
+            "hoa hoc": "Hóa học",
+            "van": "Văn học",
+            "van hoc": "Văn học",
+            "kinh te": "Kinh tế",
+            "kinh te hoc": "Kinh tế",
+            "marketing": "Marketing",
+            "ky nang": "Kỹ năng",
+            "tam ly": "Tâm lý",
+            "tam ly hoc": "Tâm lý"
+        }
+
+        # 3. REGEX EXTRACTION (Explicit Intent)
+        # Note: Input `q_norm` has NO diacritics. Patterns must accept non-diacritic keywords.
+        
+        # Capture "chủ đề X", "sách về X" -> "chu de X", "sach ve X"
+        cat_patterns = [
+            r"(?:ve|chu de|mon|linh vuc|loai|the loai|danh muc)\s+([\w\s]+)",
+            r"sach\s+([\w\s]+)" 
+        ]
+        
+        # Capture "tác giả Y", "của Y" -> "tac gia Y", "cua Y"
+        auth_patterns = [
+            r"(?:tac gia|boi|viet boi|cua|soan boi)\s+([\w\s]+)"
+        ]
+
+        # Capture "năm YYYY", "xuất bản YYYY" -> "nam", "xuat ban"
+        year_patterns = [
+            r"(?:nam|xuat ban|xb)\s+(\d{4})",
+            r"(\d{4})" # Standalone year check
+        ]
+
+        # Capture Title explicitly: "cuốn X", "quyển X" -> "cuon X", "quyen X"
+        # Note: "sach" is ambiguous (sach python -> category), so we avoid it for title unless "sách tên là"
+        title_patterns = [
+            r"(?:cuon|quyen|tac pham|tieu de|tua de)\s+(?:sach\s+)?(.+)",
+            r"sach\s+(?:ten|tua|co ten|co tua)\s+(?:la\s+)?(.+)"
+        ]
+
+        # 3a. Try extracting Year
+        db_years = available_filters.get("years", [])
+        for pattern in year_patterns:
+            match = re.search(pattern, q_norm)
+            if match:
+                y = match.group(1)
+                # Validation: Must be in DB years or reasonable range (1900-2030)
+                if y in db_years or (y.isdigit() and 1900 <= int(y) <= 2030):
+                    extracted["publish_year"] = y
+                    break
+
+        # 3b. Try extracting Title (Prioritize explicit title indicators)
+        for pattern in title_patterns:
+            match = re.search(pattern, q_norm)
+            if match:
+                raw_title = match.group(1).strip()
+                
+                # --- FIX: Prevent false positive title extraction ---
+                # Blacklist common category keywords that should NOT be titles
+                category_keywords = [
+                    "toan", "ly", "hoa", "van", "su", "dia", "sinh", 
+                    "kinh te", "tai chinh", "marketing", "lap trinh", "cntt",
+                    "python", "java", "ai", "machine learning", "data science",
+                    "ky nang", "tam ly", "triet hoc", "van hoc", "khoa hoc"
+                ]
+                
+                # Check if raw_title is a category-like keyword
+                is_category_keyword = any(kw in raw_title for kw in category_keywords)
+                
+                # Also check if it matches "ve [topic]" pattern (common false positive)
+                is_ve_pattern = raw_title.startswith("ve ") or " ve " in raw_title
+                
+                # Only accept as title if:
+                # 1. Not too short (> 2 chars)
+                # 2. Not a category keyword
+                # 3. Not a "ve [topic]" pattern (unless very specific like "cuốn Trò chuyện...")
+                if len(raw_title) > 2 and not is_category_keyword and not is_ve_pattern:
+                    extracted["title"] = raw_title
+                    break
+
+
+        # 3c. Try extracting Author via Regex
+        for pattern in auth_patterns:
+            match = re.search(pattern, q_norm)
+            if match:
+                potential_auth = match.group(1).strip()
+                # Check validity against DB authors (partial match)
+                for auth in db_authors:
+                    username_norm = remove_diacritics(auth.lower())
+                    if potential_auth in username_norm or username_norm in potential_auth:
+                        extracted["authors"] = auth
+                        break
+            if "authors" in extracted: break
+
+        # 3c. Try extracting Category via Regex or Map
+        # First check synonyms map
+        for key, full_cat in category_map.items():
+            # Fix: Use word boundary to avoid partial match (e.g. "hoa" in "khoa hoc")
+            if re.search(r'\b' + re.escape(key) + r'\b', q_norm):
+                extracted["category"] = full_cat
+                break
+        
+        # If not found via map, try regex and fuzzy match with DB
+        if "category" not in extracted:
+            sorted_cats = sorted(all_categories, key=len, reverse=True)
+            for cat in sorted_cats:
+                cat_norm = remove_diacritics(cat.lower())
+                # Direct match
+                if cat_norm in q_norm:
+                    extracted["category"] = cat 
+                    break 
+
+            # If still not found, try regex patterns for explicit category intent
+            if "category" not in extracted:
+                for pattern in cat_patterns:
+                    match = re.search(pattern, q_norm)
+                    if match:
+                        potential_cat = match.group(1).strip()
+                        # Fuzzy check against DB
+                        for cat in sorted_cats:
+                            cat_norm = remove_diacritics(cat.lower())
+                            if cat_norm in potential_cat or potential_cat in cat_norm:
+                                extracted["category"] = cat
+                                break
+                    if "category" in extracted: break
+
+        if extracted:
+            logger.info(f"Auto-extracted filters: {extracted}")
+            
+        return extracted
+
+    def _enrich_query_context(self, query: str) -> str:
+        """
+        AI Semantic Steering: Bổ sung từ khóa tiếng Anh vào query
+        để Vector Search hiểu rõ hơn ngữ cảnh (đặc biệt là Audience & Language).
+        """
+        q_norm = remove_diacritics(query.lower())
+        enriched_query = query
+        
+        # 1. AUDIENCE STEERING (Beginner vs Advanced)
+        if any(k in q_norm for k in ["co ban", "nhap mon", "nguoi moi", "bat dau", "so cap"]):
+            enriched_query += " (beginner introduction tutorial)"
+        elif any(k in q_norm for k in ["nang cao", "chuyen sau", "chuyen gia", "phan tich", "tong hop"]):
+            enriched_query += " (advanced in-depth analysis)"
+            
+        # 2. LANGUAGE STEERING
+        if any(k in q_norm for k in ["tiếng anh", "tieng anh", "english", "nuoc ngoai"]):
+            enriched_query += " (English edition foreign language)"
+            
+        if enriched_query != query:
+            logger.info(f"Query Enriched: '{query}' -> '{enriched_query}'")
+            
+        return enriched_query
+
     def generate_answer(self, question: str, session_id: str = "default", filters: dict = None) -> Dict:
         """
         Generate answer for a chat question.
-
-        Args:
-            question: User's question
-            session_id: Session identifier for conversation context
-            filters: Optional filters from FE (category, authors, year, etc.)
-
-        Returns:
-            Dict with:
-                - answer: str - AI-generated answer
-                - intent: str - Detected intent (SEARCH, SMALLTALK, FOLLOWUP, etc.)
-                - sources: List[Dict] - Book results (only for SEARCH intent, empty for others)
+        Handles Search vs Info vs Smalltalk vs Stats.
         """
         try:
             session = self.get_session(session_id)
             session.add_message("user", question)
+            
+            # --- FIX: Check Smalltalk/Library Info with ORIGINAL query ---
+            # These intents depend on exact phrases like "xin chào" which get stripped by normalization
+            if self.is_smalltalk(question):
+                intent = "SMALLTALK"
+            elif self.is_library_stats_query(question):
+                intent = "STATS"
+            elif self.is_library_info_query(question):
+                intent = "LIBRARY_INFO"
+            else:
+                # For other intents, use normalized query for better matching
+                normalized_question = self._normalize_query(question)
+                intent = self.classify_intent(normalized_question, session)
+            
+            # --- FEATURE ADDED: Auto-extract filters if none provided ---
+            extracted_filters = {}
+            if intent == "SEARCH" and not filters:
+                extracted_filters = self._extract_filters_from_text(question)
+                if extracted_filters:
+                    filters = extracted_filters
+            # -----------------------------------------------------------
 
-            intent = self.classify_intent(question, session)
             logger.info(f"Session: {session_id} | Intent: {intent} | Query: {question} | Filters: {filters}")
 
             answer = ""
-            sources = []  # Only return sources for SEARCH intent
+            sources = [] 
 
             if intent == "GARBAGE":
                 answer = "Câu hỏi không hợp lệ hoặc quá ngắn."
@@ -558,17 +877,28 @@ class RAGEngine:
 
             elif intent == "FOLLOWUP":
                 answer = self.answer_followup(question, session)
-                # Follow-up: don't return sources, info is from session internally
 
             elif intent == "STATS":
                 total = self.vector_db.get_collection_stats().get("count", 0)
-                answer = f"Hiện tại thư viện có **{total} cuốn sách** trong hệ thống."
+                answer = f"Hiện tại thư viện có {total} cuốn sách trong hệ thống."
 
             elif intent == "LIBRARY_INFO":
                 answer = self._generate_library_info_answer(question, session)
+            
+            elif intent == "TITLE_SEARCH":
+                # NEW: Optimized path for explicit title queries
+                # Extract title and perform strict title-only search
+                extracted_filters = self._extract_filters_from_text(question)
+                if "title" in extracted_filters:
+                    # Override filters to ONLY use title (highest precision)
+                    title_filter = {"title": extracted_filters["title"]}
+                    answer, sources = self._perform_book_search(question, session, filters=title_filter)
+                else:
+                    # Fallback if title extraction failed (use normal SEARCH)
+                    normalized_query = self._normalize_book_query(question)
+                    answer, sources = self._perform_book_search(normalized_query, session, filters=filters)
 
             else:  # SEARCH
-                # Normalize topic queries va truyen filters tu FE
                 normalized_query = self._normalize_book_query(question)
                 answer, sources = self._perform_book_search(normalized_query, session, filters=filters)
 
@@ -590,24 +920,6 @@ class RAGEngine:
     # ==================================================
     # SUB-HANDLERS
     # ==================================================
-    def is_library_info_query(self, q: str) -> bool:
-        ql = remove_diacritics(q.lower())
-        # Keywords for library info must be specific to RULES/POLICIES, not just actions
-        # "muon sach" alone is ambiguous (could be search), so query must imply "how to" or "rules"
-        keywords = [
-            "gio mo cua", "thoi gian mo cua", "lich mo cua",
-            "quy dinh", "noi quy", "luat thu vien",
-            "phi phat", "tien phat",
-            "cach muon", "thu tuc muon", "dieu kien muon", "luat muon", "huong dan muon",
-            "cach tra", "thu tuc tra", "luat tra", "huong dan tra",
-            "muon bao lau", "muon duoc may", "gia han"
-        ]
-        # Special check: "muon sach" only if NOT accompanied by specific book topics implies info request?
-        # Actually safer to just rely on "cach/quy dinh/..." for INFO.
-        # If user says "toi muon muon sach", let it fall to SEARCH or generic AI which clarifies.
-
-        return any(k in ql for k in keywords)
-
     def _generate_library_info_answer(self, question: str, session: ChatSession) -> str:
         """
         Tra loi cau hoi ve thu vien. Uu tien tra loi san cho cau hoi pho bien.
@@ -661,7 +973,24 @@ class RAGEngine:
         Perform book search and return (answer, sources).
         Returns: (answer: str, sources: List[Dict])
         """
-        q_vec = self.embedder.embed_text(question, is_query=True)
+        # --- FEATURE ADDED: ENRICH QUERY CONTEXT ---
+        # "sách python cho người mới" -> "... (beginner introduction)"
+        search_query = self._enrich_query_context(question)
+        # -------------------------------------------
+        
+        q_vec = self.embedder.embed_text(search_query, is_query=True)
+        
+        # --- FEATURE ADDED: Smart Cache Key Generation ---
+        # Generate cache key from normalized query + filter hash
+        # This allows "sách python" and "tìm cuốn sách về Python" to hit same cache
+        cache_key_base = remove_diacritics(search_query.lower()).strip()
+        if filters:
+            # Include filters in cache key for unique filter combinations
+            filter_str = "_".join(f"{k}:{v}" for k, v in sorted(filters.items()))
+            cache_key = f"{cache_key_base}_{filter_str}"
+        else:
+            cache_key = cache_key_base
+        # --------------------------------------------------
 
         # THÊM: Smart cache skip (từ HEAD)
         # Skip cache nếu có filters (để đảm bảo kết quả chính xác)
@@ -678,9 +1007,25 @@ class RAGEngine:
                     return f"(Cache) {cached}", []
 
         # Search với filters nếu được cung cấp
-        raw_docs = self.search_engine.search(query=question, filters=filters, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
+        raw_docs = self.search_engine.search(query=search_query, filters=filters, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
+        
+        # --- FEATURE ADDED: RELAXED SEARCH FALLBACK ---
+        # If filtered search fails (e.g. strict category mismatch), retry without filters
+        # relying purely on semantic vector match.
+        if not raw_docs and filters:
+            logger.info("Search with filters yielded 0 results. Retrying with RELAXED search (no filters)...")
+            raw_docs = self.search_engine.search(query=search_query, filters=None, top_k=self.top_k * SEARCH_EXPAND_FACTOR)
+            
         if not raw_docs:
             return self._gemini_fallback(question, session), []
+
+        # --- FEATURE ADDED: SORTING LOGIC (Newest/Oldest) ---
+        q_norm = remove_diacritics(question.lower())
+        if any(k in q_norm for k in ["moi nhat", "gan day", "nam nay", "latest", "newest"]):
+            # Sort by publish_year desc (handling valid years)
+            raw_docs.sort(key=lambda x: str(x.get('publish_year', '0')).isdigit() and int(x.get('publish_year', '0')) or 0, reverse=True)
+            logger.info("Results sorted by NEWEST")
+        # ----------------------------------------------------
 
         best_score = max(d.get("score", 0) for d in raw_docs)
         if best_score < SCORE_THRESHOLD:

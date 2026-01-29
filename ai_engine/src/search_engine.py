@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict, Optional
+import difflib
 from src.embedder import Embedder
 from src.vector_db import VectorDB
 
@@ -263,12 +264,12 @@ class SearchEngine:
 
     def _apply_python_filters(self, results: List[Dict], python_filters: Dict) -> List[Dict]:
         """
-        Apply partial match filters trong Python.
-
+        Apply partial/fuzzy match filters trong Python.
+        
         Args:
             results: Formatted search results
             python_filters: Dict with title/authors filters
-
+            
         Returns:
             Filtered results
         """
@@ -277,11 +278,40 @@ class SearchEngine:
         for book in results:
             match = True
 
-            # Check title filter (partial match, case-insensitive)
+            # Check title filter (Fuzzy Logic - IMPROVED)
             if "title" in python_filters:
+                filter_title = python_filters["title"]
                 book_title = book.get("title", "").lower()
-                if python_filters["title"] not in book_title:
-                    match = False
+                
+                # 1. Check substring (Fast path)
+                if filter_title in book_title:
+                    pass  # Match found
+                else:
+                    # 2. Fuzzy matching using word-order-insensitive approach
+                    # Use token_set_ratio for better handling of word order
+                    # Import at top if not already: from fuzzywuzzy import fuzz
+                    try:
+                        from fuzzywuzzy import fuzz
+                        
+                        # token_set_ratio ignores word order and repeated words
+                        # e.g., "trò chuyện khoa học" matches "khoa học và trò chuyện" well
+                        similarity = fuzz.token_set_ratio(filter_title, book_title)
+                        
+                        # Boost score if all filter words appear in title (partial overlap)
+                        filter_words = set(filter_title.split())
+                        title_words = set(book_title.split())
+                        if filter_words.issubset(title_words):
+                            similarity = min(similarity + 10, 100)  # Bonus for full word coverage
+                        
+                        # Threshold: 70% (stricter than before for better precision)
+                        if similarity < 70:
+                            match = False
+                    except ImportError:
+                        # Fallback to difflib if fuzzywuzzy not available
+                        import difflib
+                        similarity = difflib.SequenceMatcher(None, filter_title, book_title).ratio() * 100
+                        if similarity < 65:
+                            match = False
 
             # Check authors filter (partial match, case-insensitive)
             if "authors" in python_filters and match:
@@ -292,7 +322,7 @@ class SearchEngine:
             if match:
                 filtered.append(book)
 
-        logger.info(f"Python filters reduced {len(results)} to {len(filtered)} results")
+        logger.info(f"Python filters (Fuzzy) reduced {len(results)} to {len(filtered)} results")
         return filtered
 
     def _build_where_clause(self, filters: Dict) -> Dict:

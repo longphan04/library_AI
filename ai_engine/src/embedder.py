@@ -47,7 +47,7 @@ class Embedder:
         texts_with_prefix = [prefix + t for t in texts]
         
         try:
-            embeddings = self.model.encode(texts_with_prefix, batch_size=settings.BATCH_SIZE, normalize_embeddings=True)
+            embeddings = self.model.encode(texts_with_prefix, batch_size=settings.BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
             return embeddings.tolist()
         except Exception as e:
             logger.error(f"Error embedding batch: {e}")
