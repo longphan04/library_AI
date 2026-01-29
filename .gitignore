@@ -5,6 +5,3 @@
 .env.*
 **/.env.*
 /SLIDE
-/utils/*
-ai_engine/docs/AI_SYSTEM_ARCHITECTURE.md
-ai_engine/utils/language_stats_20260127_161607.png
