@@ -248,9 +248,12 @@ class SearchEngine:
         chromadb_filters = {}
         python_filters = {}
 
-        # Category và year dùng ChromaDB (exact match)
+        # FIX: Category dùng Python partial match vì DB có compound categories
+        # VD: "Tài chính, Khởi nghiệp, Kỹ năng" - cần match với "Khởi nghiệp"
         if filters.get("category"):
-            chromadb_filters["category"] = filters["category"]
+            python_filters["category"] = filters["category"].lower()
+        
+        # Year vẫn dùng ChromaDB (exact match)
         if filters.get("publish_year"):
             chromadb_filters["publish_year"] = filters["publish_year"]
 
@@ -268,7 +271,7 @@ class SearchEngine:
         
         Args:
             results: Formatted search results
-            python_filters: Dict with title/authors filters
+            python_filters: Dict with title/authors/category filters
             
         Returns:
             Filtered results
@@ -278,8 +281,16 @@ class SearchEngine:
         for book in results:
             match = True
 
+            # FIX: Check category filter (partial match for compound categories)
+            # VD: filter="khởi nghiệp" matches book_category="Tài chính, Khởi nghiệp, Kỹ năng"
+            if "category" in python_filters and match:
+                filter_category = python_filters["category"]
+                book_category = book.get("category", "").lower()
+                if filter_category not in book_category:
+                    match = False
+
             # Check title filter (Fuzzy Logic - IMPROVED)
-            if "title" in python_filters:
+            if "title" in python_filters and match:
                 filter_title = python_filters["title"]
                 book_title = book.get("title", "").lower()
                 
