@@ -1,4 +1,4 @@
-from .rag_engine_new import RAGEngine
+from .rag_engine import RAGEngine
 
 
 def main():
@@ -71,7 +71,7 @@ def main():
             print(answer)
         except Exception as e:
             print(f"\nLỗi: {e}")
-        
+
         print("-" * 60)
 
 

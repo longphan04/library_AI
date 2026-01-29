@@ -20,7 +20,8 @@ LIBRARY_INFO = {
     "borrow_policy": {
         "fee": "Mượn sách hoàn toàn miễn phí",
         "duration": "Thời hạn mượn tối đa 10 ngày",
-        "renew": "Có thể gia hạn nếu sách chưa có người đặt trước"
+        "renew": "Có thể gia hạn nếu sách vẫn còn trong thời hạn mượn",
+        "max_books": "Mỗi lần mượn tối đa 5 cuốn sách",
     },
     "penalty_policy": {
         "late_return": "Trả sách trễ sẽ bị phạt theo số ngày trễ",
@@ -326,3 +327,121 @@ YÊU CẦU:
 
 Hãy viết mô tả:"""
 
+
+# =====================================================
+# DESCRIPTION PROMPT HELPERS (DÙNG CHO description.py)
+# =====================================================
+
+def get_description_prompt_with_preview_text(
+    title: str,
+    authors: str,
+    categories: str,
+    publisher: str,
+    published_date: str,
+    preview_text: str,
+    max_length: int
+) -> str:
+    """Tạo prompt khi có preview text từ Google Books."""
+    return f"""
+Bạn là trợ lý AI chuyên viết mô tả sách bằng tiếng Việt.
+
+Thông tin sách:
+- Tên sách: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- NXB: {publisher}
+- Năm xuất bản: {published_date}
+
+Đoạn trích nội dung:
+{preview_text}
+
+Yêu cầu:
+- Viết mô tả CHI TIẾT, mạch lạc, tối đa {max_length} ký tự
+- Tập trung vào nội dung và giá trị của sách
+- Không bịa thông tin ngoài dữ liệu
+- Văn phong rõ ràng, tự nhiên, thân thiện
+""".strip()
+
+
+def get_description_prompt_with_existing_desc(
+    title: str,
+    authors: str,
+    categories: str,
+    publisher: str,
+    published_date: str,
+    existing_desc: str,
+    max_length: int
+) -> str:
+    """Tạo prompt khi có mô tả sẵn từ Google Books."""
+    return f"""
+Bạn là trợ lý AI chuyên viết mô tả sách bằng tiếng Việt.
+
+Thông tin sách:
+- Tên sách: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- NXB: {publisher}
+- Năm xuất bản: {published_date}
+
+Mô tả hiện có:
+{existing_desc}
+
+Yêu cầu:
+- Viết lại mô tả CHI TIẾT, trau chuốt, tối đa {max_length} ký tự
+- Giữ đúng ý chính, có thể mở rộng nhưng không bịa thông tin
+- Văn phong rõ ràng, tự nhiên, thân thiện
+""".strip()
+
+
+def get_description_prompt_metadata_only(
+    title: str,
+    authors: str,
+    categories: str,
+    published_date: str,
+    max_length: int
+) -> str:
+    """Tạo prompt khi chỉ có metadata (không có preview/desc)."""
+    return f"""
+Bạn là trợ lý AI chuyên viết mô tả sách bằng tiếng Việt.
+
+Thông tin sách:
+- Tên sách: {title}
+- Tác giả: {authors}
+- Thể loại: {categories}
+- Năm xuất bản: {published_date}
+
+Yêu cầu:
+- Viết mô tả CHI TIẾT dựa trên metadata, tối đa {max_length} ký tự
+- Không bịa nội dung cụ thể nếu không có dữ liệu
+- Tập trung vào phạm vi kiến thức, đối tượng phù hợp, giá trị tham khảo
+- Văn phong rõ ràng, tự nhiên, thân thiện
+""".strip()
+
+
+def get_description_prompt_for_template_ai(
+    book_title: str,
+    book_authors: str,
+    book_categories: str,
+    publisher: str,
+    published_date: str,
+    page_count: str,
+    existing_desc: str
+) -> str:
+    """Prompt dùng cho chế độ AI khi tạo mô tả từ template thông minh."""
+    existing_block = f"\nMô tả hiện có:\n{existing_desc}\n" if existing_desc else ""
+    return f"""
+Bạn là trợ lý AI chuyên viết mô tả sách bằng tiếng Việt.
+
+Thông tin sách:
+- Tên sách: {book_title}
+- Tác giả: {book_authors}
+- Thể loại: {book_categories}
+- NXB: {publisher}
+- Năm xuất bản: {published_date}
+- Số trang: {page_count}
+{existing_block}
+Yêu cầu:
+- Viết mô tả độc đáo, súc tích (200-1000 ký tự)
+- Tập trung vào nội dung, đối tượng phù hợp, điểm nổi bật
+- Không bịa thông tin ngoài dữ liệu
+""".strip()

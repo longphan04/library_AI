@@ -25,6 +25,7 @@ def remove_diacritics(text: str) -> str:
     """
     # Normalize to NFD form (separates base char and diacritics)
     # Normalize to NFD form (separates base char and diacritics)
+    # Normalize to NFD form (separates base char and diacritics)
     nfkd_form = unicodedata.normalize('NFD', text)
     # Remove combining diacritical marks
     text_without_accent = ''.join(c for c in nfkd_form if not unicodedata.combining(c))
@@ -259,7 +260,7 @@ class RAGEngine:
 
         if q in smalltalk_keywords:
             return True
-        
+
         # Use simple word boundary check for all keywords to avoid false positives
         # E.g. "hi" should NOT match "chi tiet"
         q_words = set(q.split())
@@ -271,7 +272,7 @@ class RAGEngine:
             # If keyword matches exactly part of the phrase (simpler than regex)
             elif k in q:
                 return True
-        
+
         return False
 
     def answer_smalltalk(self, question: str, session: ChatSession) -> str:
@@ -291,7 +292,7 @@ class RAGEngine:
         oks = ["ok", "okay", "duoc", "duoc roi", "dc", "dk"]
 
         q_words = set(q.split())
-        
+
         def check_keywords(keywords):
             for k in keywords:
                 if " " not in k: # Single word -> check word set
@@ -303,22 +304,22 @@ class RAGEngine:
         # Check and return hardcoded response
         if check_keywords(greetings):
             return "Xin chào! Tôi là trợ lý thư viện AI. Tôi có thể giúp bạn tìm sách, tra cứu thông tin thư viện. Bạn cần gì nào?"
-        
+
         if check_keywords(thanks):
             return "Không có gì! Nếu bạn cần gì thêm, cứ hỏi nhé!"
-        
+
         if check_keywords(goodbyes):
             return "Tạm biệt! Hẹn gặp lại bạn!"
-        
+
         if check_keywords(who_are_you):
             return "Tôi là Trợ lý AI của Thư viện. Tôi có thể giúp bạn tìm sách, tra cứu giờ mở cửa, nội quy và các thông tin khác về thư viện."
-        
+
         if check_keywords(how_are_you):
             return "Tôi vẫn khỏe! Cảm ơn bạn đã hỏi. Bạn cần tìm sách gì hôm nay?"
-        
+
         if check_keywords(helps):
             return "Tôi có thể giúp bạn: Tìm sách theo chủ đề, tác giả hoặc thể loại; Tra cứu giờ mở cửa thư viện; Xem nội quy và quy định mượn sách. Bạn muốn làm gì?"
-        
+
         if check_keywords(oks):
             return "Vâng! Nếu bạn cần gì thêm, cứ hỏi nhé!"
 
@@ -572,7 +573,7 @@ class RAGEngine:
                 answer, sources = self._perform_book_search(normalized_query, session, filters=filters)
 
             session.add_message("model", answer)
-            
+
             return {
                 "answer": answer,
                 "intent": intent,
@@ -601,10 +602,10 @@ class RAGEngine:
             "cach tra", "thu tuc tra", "luat tra", "huong dan tra",
             "muon bao lau", "muon duoc may", "gia han"
         ]
-        # Special check: "muon sach" only if NOT accompanied by specific book topics implies info request? 
-        # Actually safer to just rely on "cach/quy dinh/..." for INFO. 
+        # Special check: "muon sach" only if NOT accompanied by specific book topics implies info request?
+        # Actually safer to just rely on "cach/quy dinh/..." for INFO.
         # If user says "toi muon muon sach", let it fall to SEARCH or generic AI which clarifies.
-        
+
         return any(k in ql for k in keywords)
 
     def _generate_library_info_answer(self, question: str, session: ChatSession) -> str:
