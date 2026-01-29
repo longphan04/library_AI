@@ -25,7 +25,6 @@ def remove_diacritics(text: str) -> str:
     """
     # Normalize to NFD form (separates base char and diacritics)
     # Normalize to NFD form (separates base char and diacritics)
-    # Normalize to NFD form (separates base char and diacritics)
     nfkd_form = unicodedata.normalize('NFD', text)
     # Remove combining diacritical marks
     text_without_accent = ''.join(c for c in nfkd_form if not unicodedata.combining(c))
@@ -920,6 +919,24 @@ class RAGEngine:
     # ==================================================
     # SUB-HANDLERS
     # ==================================================
+    def is_library_info_query(self, q: str) -> bool:
+        ql = remove_diacritics(q.lower())
+        # Keywords for library info must be specific to RULES/POLICIES, not just actions
+        # "muon sach" alone is ambiguous (could be search), so query must imply "how to" or "rules"
+        keywords = [
+            "gio mo cua", "thoi gian mo cua", "lich mo cua",
+            "quy dinh", "noi quy", "luat thu vien",
+            "phi phat", "tien phat",
+            "cach muon", "thu tuc muon", "dieu kien muon", "luat muon", "huong dan muon",
+            "cach tra", "thu tuc tra", "luat tra", "huong dan tra",
+            "muon bao lau", "muon duoc may", "gia han"
+        ]
+        # Special check: "muon sach" only if NOT accompanied by specific book topics implies info request? 
+        # Actually safer to just rely on "cach/quy dinh/..." for INFO. 
+        # If user says "toi muon muon sach", let it fall to SEARCH or generic AI which clarifies.
+        
+        return any(k in ql for k in keywords)
+
     def _generate_library_info_answer(self, question: str, session: ChatSession) -> str:
         """
         Tra loi cau hoi ve thu vien. Uu tien tra loi san cho cau hoi pho bien.
