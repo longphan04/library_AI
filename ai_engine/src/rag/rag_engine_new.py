@@ -412,13 +412,26 @@ class RAGEngine:
         # 4. Follow-up check
         if session.last_search_results:
             followup_keywords = [
+                # Book reference keywords
                 "cuon nay", "cuon do", "cuon thu", "sach nay", "sach do",
                 "chi tiet", "no noi ve", "tac gia la ai", "gia bao nhieu",
                 "trong so", "cuon nao", "cai nao", "de hoc", "tot nhat",
                 "phu hop", "nen chon", "o tren", "vua roi", "trong danh sach",
                 "hay nhat", "hay hon", "tot hon", "noi ve gi", "ve cai gi",
                 "cua ai", "ai viet", "nam nao", "xuat ban nam", "may trang",
-                "nen doc", "doc truoc", "doc sau", "cuon dau", "cuon cuoi"
+                "nen doc", "doc truoc", "doc sau", "cuon dau", "cuon cuoi",
+                
+                # FIX: Added missing keywords for collective follow-ups
+                "tom tat",          # tóm tắt
+                "tat ca",           # tất cả
+                "ca hai",           # cả hai
+                "ca 2", "ca 3",     # cả 2, cả 3
+                "moi cuon",         # mọi cuốn
+                "cac cuon",         # các cuốn
+                "nhung cuon",       # những cuốn
+                "cuon nao",         # cuốn nào
+                "so sanh",          # so sánh
+                "khac nhau",        # khác nhau
             ]
             if any(k in q_normalized for k in followup_keywords):
                 return "FOLLOWUP"
@@ -571,8 +584,14 @@ class RAGEngine:
         """Trả lời follow-up dựa trên last_search_results của session"""
         q = question.lower()
 
-        # 1. Check for "all" / "summarize all"
-        if any(k in q for k in ["tất cả", "cả hai", "cả 2", "cả 3", "mọi cuốn", "những cuốn này", "các cuốn"]):
+        # 1. Check for "all" / "summarize all" OR "Comparison"
+        # Force LLM for these complex cases
+        collective_keywords = [
+            "tất cả", "cả hai", "cả 2", "cả 3", "mọi cuốn", "những cuốn này", "các cuốn",
+            "so sánh", "khác nhau", "giống nhau", "vs"
+        ]
+        
+        if any(k in q for k in collective_keywords):
             books_text = "\n".join([
                 f"{i}. {d['title']} – {d['authors']}"
                 for i, d in enumerate(session.last_search_results, 1)
